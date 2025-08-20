@@ -1,0 +1,50 @@
+<html>
+    <head>
+        <script type="text/javascript" src="binder.js"></script>      
+        <script type="text/javascript">
+
+            let binder = null;
+            
+            function init()
+            {
+                binder = new JSBinder();
+                binder.scan();
+    
+                const planets = [
+                    { "name": "Sun", "diameter": 1391016, "type": "Star" },
+                    { "name": "Mercury", "diameter": 4879, "type": "Terrestrial" },
+                    { "name": "Venus", "diameter": 12104, "type": "Terrestrial" },
+                    { "name": "Earth", "diameter": 12742, "type": "Terrestrial" },
+                    { "name": "Mars", "diameter": 6779, "type": "Terrestrial" },
+                    { "name": "Jupiter", "diameter": 139820, "type": "Gas" },
+                    { "name": "Saturn", "diameter": 116460, "type": "Gas" },
+                    { "name": "Uranus", "diameter": 50724, "type": "Ice" },
+                    { "name": "Neptune", "diameter": 49244, "type": "Ice" },
+                ];
+    
+                binder.setState({
+                    planets,
+                    type_filter : "",
+                });  
+            }
+        </script>
+    </head>
+    <body onload="init();">
+        <select data-bind='type_filter' data-onchange="type_filter = @value">
+            <option value="">All</option>
+            <option data-each="@x in planets" data-key="@x.type" data-distinct="@x.type" value="{{@x.type}}">{{@x.type}}</option>
+        </select>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Diameter (km)</th>
+                <th>Type</th>
+            </tr>
+            <tr data-each="@x in planets" data-key="@x.name" data-where="type_filter === '' || @x.type === type_filter">
+                <td>{{@x.name}}</td>
+                <td>{{@x.diameter}}</td>
+                <td>{{@x.type}}</td>
+            </tr>
+        </table>
+    </body>
+</html>
