@@ -30,6 +30,7 @@ class JSBinder
 
     static #error = (msg) => console.error(`JSBinder: ${msg}`);
     static #info = (msg) => console.info(`JSBinder: ${msg}`);
+    static #warn = (msg) => console.warn(`JSBinder: ${msg}`);
 
     static #listOrSingle = (x) => (Array.isArray(x) && x.length === 1) ? x[0] : x;
 
@@ -49,7 +50,7 @@ class JSBinder
     static #deserializeHTML = (html) => { let t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
 
     // ".*+" >> "\\.\\*\\+"
-    static #escapeRgx = (string) => { return string.replace(new RegExp("[.*+?^${}()|\\[\\]\\\\]", "g"), '\\$&'); };
+    static #escapeRgx = (string) => string.replace(new RegExp("[.*+?^${}()|\\[\\]\\\\]", "g"), '\\$&');
 
     // Left-to-right function composition. JSBinder.#pipe(f1, f2, f3)(x) >> f3(f2(f1(x)));
     static #pipe = (...fns) => (x) => fns.reduce((v, f) => f(v), x);
@@ -731,6 +732,9 @@ class JSBinder
                         const m = attributes[i].value.match(rgx_interpolation);
 
                         if (m) {
+                            if ((JSBinder.#typeOf(element) === JSBinder.#Type.SELECT || JSBinder.#typeOf(element) === JSBinder.#Type.INPUT) && attributes[i].name.toLowerCase() === "value")
+                                JSBinder.#warn("Binding attribute 'value' on form elements can only be done with 'data-bind'.");
+
                             this.#items.push({
                                 obj: element,
                                 type: "attribute",
@@ -881,6 +885,10 @@ class JSBinder
                             return JSBinder.#error(`incorrect 'attribute' syntax: ${mapping}`);
 
                         const { 2: key, 3: expression } = m;
+
+                        if ((JSBinder.#typeOf(obj) === JSBinder.#Type.SELECT || JSBinder.#typeOf(obj) === JSBinder.#Type.INPUT) && key.toLowerCase() === "value")
+                            JSBinder.#warn("Binding attribute 'value' on form elements can only be done with 'data-bind'.");
+
                         this.#items.push({
                             obj, 
                             key, 
@@ -1038,9 +1046,6 @@ class JSBinder
 
             binder.#findDirectives($onchange)
                 ((obj) => {
-                    if (!obj.matches("select") && !obj.matches("input"))
-                        return JSBinder.#error(`'onchange' directive is only supported for <select> and <input>`);
-
                     JSBinder.#split(JSBinder.#pop(obj)($onchange)).forEach((mapping) => {
                         const m = mapping.match(new RegExp("^" + `(${JSBinder.#RGX_PATH})` + "\\s+" + "=" + "\\s+" + `(${JSBinder.#RGX_EXP})` + "$"));
 
@@ -1070,6 +1075,9 @@ class JSBinder
                             case JSBinder.#Type.INPUT:
                                 binder.#addEvent(obj)("input", (e) => set(toSafeString(obj.value)));
                                 break;
+
+                            default:
+                                return JSBinder.#error(`'onchange' directive is only supported for <select> and <input>`);
                         }
                     });
                 });

@@ -32,7 +32,7 @@
     <body onload="init();">
         <select data-bind='type_filter' data-onchange="type_filter = @value">
             <option value="">All</option>
-            <option data-each="@x in planets" data-key="@x.type" data-distinct="@x.type" value="{{@x.type}}">{{@x.type}}</option>
+            <option data-each="@x in planets" data-key="@x.type" data-orderby="@x.type" data-distinct="@x.type" value="{{@x.type}}">{{@x.type}}</option>
         </select>
         <table>
             <tr>
