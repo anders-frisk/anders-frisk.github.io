@@ -1,38 +1,8 @@
 <html>
     <head>
-        <script type="text/javascript" src="binder.js"></script>      
-        <script type="text/javascript">
-
-            let binder = null;
-            
-            function init()
-            {
-                binder = new JSBinder();
-                binder.scan();
-
-                const planets = [
-                    { "name": "Sun", "diameter": 1391016, "type": "Star" },
-                    { "name": "Mercury", "diameter": 4879, "type": "Terrestrial" },
-                    { "name": "Venus", "diameter": 12104, "type": "Terrestrial" },
-                    { "name": "Earth", "diameter": 12742, "type": "Terrestrial" },
-                    { "name": "Mars", "diameter": 6779, "type": "Terrestrial" },
-                    { "name": "Jupiter", "diameter": 139820, "type": "Gas" },
-                    { "name": "Saturn", "diameter": 116460, "type": "Gas" },
-                    { "name": "Uranus", "diameter": 50724, "type": "Ice" },
-                    { "name": "Neptune", "diameter": 49244, "type": "Ice" },
-                ];
-
-                binder.addFunction("ceil", (x) => Math.ceil(x));
-                binder.setState({
-                    planets,
-                    page: 0,
-                    pagesize: 4,
-                });
-            }
-            
-        </script>
+        <title>Table with Paging Demo</title>
     </head>
-    <body onload="init();">
+    <body>
         <table>
             <tr>
                 <th>Name</th>
@@ -46,5 +16,31 @@
             </tr>
         </table>
         <button data-for="@page" data-from="1" data-to="#ceil(planets.length / pagesize)" data-onclick="page = @page - 1">{{@page}}</button>
+
+        <script src="binder.js"></script>
+        <script>
+            const binder = new JSBinder();
+
+            const planets = [
+                { "name": "Sun", "diameter": 1391016, "type": "Star" },
+                { "name": "Mercury", "diameter": 4879, "type": "Terrestrial" },
+                { "name": "Venus", "diameter": 12104, "type": "Terrestrial" },
+                { "name": "Earth", "diameter": 12742, "type": "Terrestrial" },
+                { "name": "Mars", "diameter": 6779, "type": "Terrestrial" },
+                { "name": "Jupiter", "diameter": 139820, "type": "Gas" },
+                { "name": "Saturn", "diameter": 116460, "type": "Gas" },
+                { "name": "Uranus", "diameter": 50724, "type": "Ice" },
+                { "name": "Neptune", "diameter": 49244, "type": "Ice" },
+            ];
+
+            binder.addFunction("ceil", (x) => Math.ceil(x));
+            binder.setState({
+                planets,
+                page: 0,
+                pagesize: 4,
+            });
+
+            binder.scan();
+        </script>
     </body>
 </html>
