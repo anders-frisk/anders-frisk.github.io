@@ -82,6 +82,7 @@
 
     let positionMarker = null;
     let firstPosition = true;
+    let accuracyCircle = null;
 
 
     // Watch GPS position
@@ -96,12 +97,12 @@
             // GPS heading, in degrees
             const heading = position.coords.heading;
 
-            console.log({
-                latitude,
-                longitude,
-                accuracy,
-                heading
-            });
+            // console.log({
+            //     latitude,
+            //     longitude,
+            //     accuracy,
+            //     heading
+            // });
 
 
             // Create marker the first time
@@ -121,6 +122,25 @@
                     longitude
                 ]);
 
+            }
+
+
+            if (!accuracyCircle)
+            {
+                accuracyCircle = L.circle(
+                    [latitude, longitude],
+                    {
+                        radius: accuracy,
+                        // Appearance
+                        color: "#1976d2",
+                        weight: 2,
+                        fillColor: "#1976d2",
+                        fillOpacity: 0.15
+                    }
+                ).addTo(map);
+            } else {
+                accuracyCircle.setLatLng([latitude, longitude]);
+                accuracyCircle.setRadius(accuracy);
             }
 
 
