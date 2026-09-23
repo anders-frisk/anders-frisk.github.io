@@ -43,6 +43,7 @@
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="halmstad_epic.js"></script>
 
 <script>
 
@@ -59,6 +60,10 @@
             attribution: "&copy; OpenStreetMap contributors"
         }
     ).addTo(map);
+
+
+    L.polyline(halmstad_epic).addTo(map);
+    //map.fitBounds(L.polyline(coordinates).getBounds());
 
 
     // Create direction marker
