@@ -40,15 +40,15 @@
 
 <body>
 
-<div id="map"></div>
-<div id="debug">
-    <div id="debug-longitude"></div>
-    <div id="debug-latitude"></div>
-    <div id="debug-gps"></div>
-    <div id="debug-heading"></div>
-    <div id="debug-accuracy"></div>
-    <div id="debug-speed"></div>
-</div>
+    <div id="debug">
+        <div id="debug-latitude"></div>
+        <div id="debug-longitude"></div>
+        <div id="debug-accuracy"></div>
+        <div id="debug-heading"></div>
+        <div id="debug-speed"></div>
+        <div id="debug-compass"></div>
+    </div>
+    <div id="map"></div>
 
 <!-- <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
 
@@ -241,8 +241,10 @@
         // });
     };
 
-    await init_gps();
-    await init_compass();
+    init_gps();
+    init_compass();
+
+    /*
 
     // Create map
     const map = L.map("map", {
@@ -277,6 +279,7 @@
     let firstPosition = true;
     let accuracyCircle = null;
 
+    */
 
     // // Watch GPS position
     // navigator.geolocation.watchPosition(
