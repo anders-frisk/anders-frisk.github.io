@@ -62,6 +62,13 @@
 
 <script>
 
+    let latitude = null;
+    let longitude = null;
+    let accuracy = null;
+    let heading = null;
+    let speed = null;
+    let compass = null;
+
     const init_gps = async () => {
         navigator.geolocation.watchPosition(
 
@@ -211,13 +218,13 @@
     };
 
     const handle_gps = (position) => {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-        const accuracy = position.coords.accuracy; // meters
-        const speed = position.coords.speed; // m/s
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+        accuracy = position.coords.accuracy; // meters
+        speed = position.coords.speed; // m/s
+        heading = position.coords.heading; // degrees
 
-        // GPS heading, in degrees
-        const heading = position.coords.heading; // degrees
+        request_refresh();
 
         // console.log({
         //     latitude,
@@ -235,54 +242,150 @@
     };
 
     const handle_compass = (event) => {
-        const alpha = event.alpha;  // degrees
+        compass = event.alpha;  // degrees
 
-        document.querySelector("#debug-compass").textContent = "compass: " + alpha + "°";
+        request_refresh();
+
+        document.querySelector("#debug-compass").textContent = "compass: " + compass + "°";
 
         // console.log({
-        //     alpha
+        //     compass
         // });
+    };
+
+    let request_refresh_pending = false;
+
+    const request_refresh = () => {
+
+        if (request_refresh_pending) return;
+        request_refresh_pending = true;
+
+        window.queueMicrotask(() => {
+            request_refresh_pending = false;
+
+            update_map();
+        });
+
+    };
+
+
+    const update_map = () => {
+
+
+        if (latitude !== null && longitude !== null) {
+            // Create marker the first time
+            if (!positionMarker) {
+
+                positionMarker = L.marker(
+                    [latitude, longitude],
+                    {
+                        icon: directionIcon
+                    }
+                ).addTo(map);
+
+            } else {
+
+                positionMarker.setLatLng([
+                    latitude,
+                    longitude
+                ]);
+
+            }
+        }
+
+        if (latitude !== null && longitude !== null) {
+            if (!accuracyCircle)
+            {
+                accuracyCircle = L.circle(
+                    [latitude, longitude],
+                    {
+                        radius: accuracy,
+                        // Appearance
+                        color: "#1976d2",
+                        weight: 2,
+                        fillColor: "#1976d2",
+                        fillOpacity: 0.15
+                    }
+                ).addTo(map);
+            } else {
+                accuracyCircle.setLatLng([latitude, longitude]);
+                accuracyCircle.setRadius(accuracy);
+            }
+        }
+
+        if (latitude !== null && longitude !== null) {
+            // Center map on user
+            map.setView(
+                [latitude, longitude],
+                map.getZoom() || 17
+            );
+        }
+
+
+            // Get direction for the arrow. Compass takes precedence over heading
+        const direction = compass !== null && !isNaN(compass)
+            ? compass
+            : heading !== null && !isNaN(heading)
+                ? heading
+                : 0;
+        
+        //if (direction !== null) {
+            
+        // Rotate direction arrow
+            const element =
+                positionMarker.getElement();
+
+            if (element) {
+
+                const arrow =
+                    element.querySelector(
+                        ".direction-marker"
+                    );
+
+                if (arrow) {
+                    arrow.style.transform =
+                        `rotate(${direction}deg)`;
+                }
+            }
+            //}
     };
 
     init_gps();
     //init_compass(); // Must be started manually by the user due to permission requirements
 
-    /*
-
+    
     // Create map
     const map = L.map("map", {
         zoomControl: false
-    });
-
-    // OpenStreetMap tiles
-    // L.tileLayer(
-    //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    //     {
-    //         maxZoom: 19,
-    //         attribution: "&copy; OpenStreetMap contributors"
-    //     }
-    // ).addTo(map);
-
-    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-
-
-    L.polyline(halmstad_epic).addTo(map);
-    //map.fitBounds(L.polyline(coordinates).getBounds());
-
-
-    // Create direction marker
-    const directionIcon = L.divIcon({
-        className: "",
-        html: '<div class="direction-marker"></div>',
-        iconSize: [24, 30],
-        iconAnchor: [12, 15]
-    });
-
-    let positionMarker = null;
-    let firstPosition = true;
-    let accuracyCircle = null;
-
-    */
+        });
+        
+        // OpenStreetMap tiles
+        // L.tileLayer(
+            //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            //     {
+                //         maxZoom: 19,
+                //         attribution: "&copy; OpenStreetMap contributors"
+                //     }
+                // ).addTo(map);
+                
+        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+        
+        
+        L.polyline(halmstad_epic).addTo(map);
+        //map.fitBounds(L.polyline(coordinates).getBounds());
+        
+        
+        // Create direction marker
+        const directionIcon = L.divIcon({
+            className: "",
+            html: '<div class="direction-marker"></div>',
+            iconSize: [24, 30],
+            iconAnchor: [12, 15]
+            });
+            
+        let positionMarker = null;
+        let firstPosition = true;
+        let accuracyCircle = null;
 
     // // Watch GPS position
     // navigator.geolocation.watchPosition(
