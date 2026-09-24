@@ -48,6 +48,9 @@
         <div id="debug-speed"></div>
         <div id="debug-compass"></div>
     </div>
+    <button id="start-compass" onclick="init_compass()">
+        Start Compass
+    </button>
     <div id="map"></div>
 
 <!-- <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
@@ -242,7 +245,7 @@
     };
 
     init_gps();
-    init_compass();
+    //init_compass(); // Must be started manually by the user due to permission requirements
 
     /*
 
