@@ -226,8 +226,8 @@
 
         document.querySelector("#debug-latitude").textContent = "lat: " + latitude;
         document.querySelector("#debug-longitude").textContent = "lon: " + longitude;
-        document.querySelector("#debug-accuracy").textContent = "acc: " + accuracy;
-        document.querySelector("#debug-heading").textContent = "head: " + heading;
+        document.querySelector("#debug-accuracy").textContent = "acc: " + accuracy + "m";
+        document.querySelector("#debug-heading").textContent = "head: " + heading + "°";
         document.querySelector("#debug-speed").textContent = "speed: " + (speed ? (speed * 3.6).toFixed(1) + "km/h" : "-");
     };
 
