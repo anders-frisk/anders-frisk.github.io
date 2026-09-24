@@ -210,11 +210,11 @@
     const handle_gps = (position) => {
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
-        const speed = position.coords.speed;
+        const accuracy = position.coords.accuracy; // meters
+        const speed = position.coords.speed; // m/s
 
         // GPS heading, in degrees
-        const heading = position.coords.heading;
+        const heading = position.coords.heading; // degrees
 
         // console.log({
         //     latitude,
@@ -224,17 +224,17 @@
         //     speed,
         // });
 
-        document.querySelector("#debug-latitude").textContent = latitude;
-        document.querySelector("#debug-longitude").textContent = longitude;
-        document.querySelector("#debug-accuracy").textContent = accuracy;
-        document.querySelector("#debug-heading").textContent = heading;
-        document.querySelector("#debug-speed").textContent = speed;
+        document.querySelector("#debug-latitude").textContent = "lat: " + latitude;
+        document.querySelector("#debug-longitude").textContent = "lon: " + longitude;
+        document.querySelector("#debug-accuracy").textContent = "acc: " + accuracy;
+        document.querySelector("#debug-heading").textContent = "head: " + heading;
+        document.querySelector("#debug-speed").textContent = "speed: " + (speed ? (speed * 3.6).toFixed(1) + "km/h" : "-");
     };
 
     const handle_compass = (event) => {
-        const alpha = event.alpha; // Compass heading in degrees
+        const alpha = event.alpha;  // degrees
 
-        document.querySelector("#debug-compass").textContent = alpha;
+        document.querySelector("#debug-compass").textContent = "compass: " + alpha;
 
         // console.log({
         //     alpha
