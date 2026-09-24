@@ -328,30 +328,26 @@
             : heading !== null && !isNaN(heading)
                 ? heading
                 : 0;
-        
-        //if (direction !== null) {
 
-        if (false)
-        {
-            // Rotate direction arrow
-            const element = positionMarker.getElement();
+        // Rotate direction arrow
+        //const element = positionMarker.getElement();
 
-            if (element) {
+        const arrow = positionMarker.getElement()?.querySelector(".direction-marker");
 
-                const arrow = element.querySelector(".direction-marker");
+        //if (element) {
 
-                if (arrow) {
-                    arrow.style.transform =
-                    `rotate(${direction}deg)`;
-                }
+            //const arrow = element.querySelector(".direction-marker");
+
+            if (arrow) {
+                arrow.style.transform =
+                `rotate(${direction}deg)`;
             }
-        }
-        else
-        {               
-            // Rotate map
-            const mapElement = document.getElementById("map");
-            mapElement.style.transform = `rotate(${-direction}deg)`;
-        }
+        //}
+              
+        // Rotate map
+        const mapElement = document.getElementById("map");
+        mapElement.style.transform = `rotate(${-direction}deg)`;
+
     };
 
     init_gps();
