@@ -324,7 +324,7 @@
 
             // Get direction for the arrow. Compass takes precedence over heading
         const direction = compass !== null && !isNaN(compass)
-            ? (compass + 180) % 360
+            ? (180 - compass + 360) % 360
             : heading !== null && !isNaN(heading)
                 ? heading
                 : 0;
