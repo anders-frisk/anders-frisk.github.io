@@ -20,11 +20,15 @@
             padding: 0;
             width: 100%;
             height: 100%;
+            overflow: hidden;
         }
 
         #map {
-            width: 100%;
-            height: 100%;
+            position: absolute;
+            top: -25%;
+            left: -25%;
+            width: 150%;
+            height: 150%;
         }
 
         .direction-marker {
@@ -35,11 +39,20 @@
             border-bottom: 30px solid #1976d2;
             transform-origin: 50% 70%;
         }
+
+        #start-compass
+        {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 100%;
+        }
     </style>
 </head>
 
 <body>
 
+    <div id="map"></div>
     <div id="debug">
         <div id="debug-latitude"></div>
         <div id="debug-longitude"></div>
@@ -51,7 +64,6 @@
     <button id="start-compass" onclick="init_compass()">
         Start Compass
     </button>
-    <div id="map"></div>
 
 <!-- <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
 
@@ -329,20 +341,12 @@
                 ? heading
                 : 0;
 
-        // Rotate direction arrow
-        //const element = positionMarker.getElement();
-
+        // Rotate arrow
         const arrow = positionMarker.getElement()?.querySelector(".direction-marker");
-
-        //if (element) {
-
-            //const arrow = element.querySelector(".direction-marker");
-
-            if (arrow) {
-                arrow.style.transform =
-                `rotate(${direction}deg)`;
-            }
-        //}
+        if (arrow) {
+            arrow.style.transform =
+            `rotate(${direction}deg)`;
+        }
               
         // Rotate map
         const mapElement = document.getElementById("map");
