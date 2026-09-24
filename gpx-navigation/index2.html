@@ -330,24 +330,28 @@
                 : 0;
         
         //if (direction !== null) {
-            
-        // Rotate direction arrow
-            const element =
-                positionMarker.getElement();
+
+        if (false)
+        {
+            // Rotate direction arrow
+            const element = positionMarker.getElement();
 
             if (element) {
 
-                const arrow =
-                    element.querySelector(
-                        ".direction-marker"
-                    );
+                const arrow = element.querySelector(".direction-marker");
 
                 if (arrow) {
                     arrow.style.transform =
-                        `rotate(${direction}deg)`;
+                    `rotate(${direction}deg)`;
                 }
             }
-            //}
+        }
+        else
+        {               
+            // Rotate map
+            const mapElement = document.getElementById("map");
+            mapElement.style.transform = `rotate(${-direction}deg)`;
+        }
     };
 
     init_gps();
