@@ -56,33 +56,19 @@
             background-color: #FFFFFF;
         }
     </style>
-</head>
 
-<body>
-
-    <div id="map"></div>
-    <div id="debug">
-        <div id="debug-latitude"></div>
-        <div id="debug-longitude"></div>
-        <div id="debug-accuracy"></div>
-        <div id="debug-heading"></div>
-        <div id="debug-speed"></div>
-        <div id="debug-alpha"></div>
-        <div id="debug-webkit-compass-heading"></div>
-    </div>
-    <button id="start-compass" onclick="init_compass()">
-        Start Compass
-    </button>
-
-<!-- <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
+    <!-- <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> -->
 
     <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
     <link href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet"/>
 
-<script src="halmstad_epic.js"></script>
+    <script src="halmstad_epic.js"></script>
 
 <script>
 
+    const qs = (selector) => document.querySelector(selector);
+
+    let map = null;
     let latitude = null;
     let longitude = null;
     let accuracy = null;
@@ -90,6 +76,37 @@
     let speed = null;
     let alpha = null;
     let webkitCompassHeading = null;
+
+    const init_map = async () => {
+        // Create map
+        map = L.map("map", {
+            zoomControl: false
+            });
+            
+            // OpenStreetMap tiles
+            // L.tileLayer(
+                //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                //     {
+                    //         maxZoom: 19,
+                    //         attribution: "&copy; OpenStreetMap contributors"
+                    //     }
+                    // ).addTo(map);
+                    
+            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+            
+            
+            L.polyline(halmstad_epic).addTo(map);
+            //map.fitBounds(L.polyline(coordinates).getBounds());
+            
+            
+            // Create direction marker
+            directionIcon = L.divIcon({
+                className: "",
+                html: '<div class="direction-marker"></div>',
+                iconSize: [24, 30],
+                iconAnchor: [12, 15]
+                });
+    };
 
     const init_gps = async () => {
         navigator.geolocation.watchPosition(
@@ -252,11 +269,11 @@
 
         request_refresh();
 
-        document.querySelector("#debug-latitude").textContent = "lat: " + (latitude ? latitude.toFixed(6) : "-");
-        document.querySelector("#debug-longitude").textContent = "lon: " + (longitude ? longitude.toFixed(6) : "-");
-        document.querySelector("#debug-accuracy").textContent = "acc: " + (accuracy ? accuracy.toFixed(1) + "m" : "-");
-        document.querySelector("#debug-heading").textContent = "head: " + (heading ? heading.toFixed(1) + "°" : "-");
-        document.querySelector("#debug-speed").textContent = "speed: " + (speed ? (speed * 3.6).toFixed(1) + "km/h" : "-");
+        qs("#debug-latitude").textContent = "lat: " + (latitude ? latitude.toFixed(6) : "-");
+        qs("#debug-longitude").textContent = "lon: " + (longitude ? longitude.toFixed(6) : "-");
+        qs("#debug-accuracy").textContent = "acc: " + (accuracy ? accuracy.toFixed(1) + "m" : "-");
+        qs("#debug-heading").textContent = "head: " + (heading ? heading.toFixed(1) + "°" : "-");
+        qs("#debug-speed").textContent = "speed: " + (speed ? (speed * 3.6).toFixed(1) + "km/h" : "-");
     };
 
 
@@ -264,9 +281,7 @@
 
 
     let lastCompassUpdate = 0;
-    //const compassInterval = 100; // ms = 10 Hz
-    //const compassInterval = 20; // ms = 50 Hz
-    const compassInterval = 10; // ms = 100 Hz
+    const compassInterval = 10; // 100 ms = 10 Hz, 20 ms = 50 Hz, 10 ms = 100 Hz
 
     const handle_compass = (event) => {
 
@@ -281,8 +296,8 @@
             
             request_refresh();
 
-            document.querySelector("#debug-alpha").textContent = "alpha: " + (alpha ? alpha.toFixed(1) + "°" : "-");
-            document.querySelector("#debug-webkit-compass-heading").textContent = "webkitCompassHeading: " + (webkitCompassHeading ? webkitCompassHeading.toFixed(1) + "°" : "-");
+            qs("#debug-alpha").textContent = "alpha: " + (alpha ? alpha.toFixed(1) + "°" : "-");
+            qs("#debug-webkit-compass-heading").textContent = "webkitCompassHeading: " + (webkitCompassHeading ? webkitCompassHeading.toFixed(1) + "°" : "-");
         }
     };
 
@@ -370,166 +385,166 @@
                         : 0;
 
         // Rotate arrow
-        const arrow = positionMarker.getElement()?.querySelector(".direction-marker");
+        const arrow = positionMarker?.getElement()?.querySelector(".direction-marker");
         if (arrow) {
             arrow.style.transform =
             `rotate(${direction}deg)`;
         }
               
         // Rotate map
-        const mapElement = document.getElementById("map");
-        mapElement.style.transform = `rotate(${-direction}deg)`;
+        const mapElement = qs("#map");
+        if (mapElement) {
+            mapElement.style.transform = `rotate(${-direction}deg)`;
+        }
 
     };
 
-    init_gps();
-    //init_compass(); // Must be started manually by the user due to permission requirements
+    let positionMarker = null;
+    let firstPosition = true;
+    let accuracyCircle = null;
+    let directionIcon = null;
 
-    
-    // Create map
-    const map = L.map("map", {
-        zoomControl: false
-        });
+    const init = () => {
+
+        init_map();
+        init_gps();
+        //init_compass(); // Must be started manually by the user due to permission requirements
+
         
-        // OpenStreetMap tiles
-        // L.tileLayer(
-            //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            //     {
-                //         maxZoom: 19,
-                //         attribution: "&copy; OpenStreetMap contributors"
-                //     }
-                // ).addTo(map);
+
                 
-        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-        
-        
-        L.polyline(halmstad_epic).addTo(map);
-        //map.fitBounds(L.polyline(coordinates).getBounds());
-        
-        
-        // Create direction marker
-        const directionIcon = L.divIcon({
-            className: "",
-            html: '<div class="direction-marker"></div>',
-            iconSize: [24, 30],
-            iconAnchor: [12, 15]
-            });
-            
-        let positionMarker = null;
-        let firstPosition = true;
-        let accuracyCircle = null;
-
-    // // Watch GPS position
-    // navigator.geolocation.watchPosition(
-
-    //     function(position) {
-
-    //         const latitude = position.coords.latitude;
-    //         const longitude = position.coords.longitude;
-    //         const accuracy = position.coords.accuracy;
-
-    //         // GPS heading, in degrees
-    //         const heading = position.coords.heading;
-
-    //         // console.log({
-    //         //     latitude,
-    //         //     longitude,
-    //         //     accuracy,
-    //         //     heading
-    //         // });
 
 
-    //         // Create marker the first time
-    //         if (!positionMarker) {
+        // // Watch GPS position
+        // navigator.geolocation.watchPosition(
 
-    //             positionMarker = L.marker(
-    //                 [latitude, longitude],
-    //                 {
-    //                     icon: directionIcon
-    //                 }
-    //             ).addTo(map);
+        //     function(position) {
 
-    //         } else {
+        //         const latitude = position.coords.latitude;
+        //         const longitude = position.coords.longitude;
+        //         const accuracy = position.coords.accuracy;
 
-    //             positionMarker.setLatLng([
-    //                 latitude,
-    //                 longitude
-    //             ]);
+        //         // GPS heading, in degrees
+        //         const heading = position.coords.heading;
 
-    //         }
-
-
-    //         if (!accuracyCircle)
-    //         {
-    //             accuracyCircle = L.circle(
-    //                 [latitude, longitude],
-    //                 {
-    //                     radius: accuracy,
-    //                     // Appearance
-    //                     color: "#1976d2",
-    //                     weight: 2,
-    //                     fillColor: "#1976d2",
-    //                     fillOpacity: 0.15
-    //                 }
-    //             ).addTo(map);
-    //         } else {
-    //             accuracyCircle.setLatLng([latitude, longitude]);
-    //             accuracyCircle.setRadius(accuracy);
-    //         }
+        //         // console.log({
+        //         //     latitude,
+        //         //     longitude,
+        //         //     accuracy,
+        //         //     heading
+        //         // });
 
 
-    //         // Center map on user
-    //         map.setView(
-    //             [latitude, longitude],
-    //             map.getZoom() || 17
-    //         );
+        //         // Create marker the first time
+        //         if (!positionMarker) {
+
+        //             positionMarker = L.marker(
+        //                 [latitude, longitude],
+        //                 {
+        //                     icon: directionIcon
+        //                 }
+        //             ).addTo(map);
+
+        //         } else {
+
+        //             positionMarker.setLatLng([
+        //                 latitude,
+        //                 longitude
+        //             ]);
+
+        //         }
 
 
-    //         // Rotate direction arrow
-    //         if (heading !== null && !isNaN(heading)) {
+        //         if (!accuracyCircle)
+        //         {
+        //             accuracyCircle = L.circle(
+        //                 [latitude, longitude],
+        //                 {
+        //                     radius: accuracy,
+        //                     // Appearance
+        //                     color: "#1976d2",
+        //                     weight: 2,
+        //                     fillColor: "#1976d2",
+        //                     fillOpacity: 0.15
+        //                 }
+        //             ).addTo(map);
+        //         } else {
+        //             accuracyCircle.setLatLng([latitude, longitude]);
+        //             accuracyCircle.setRadius(accuracy);
+        //         }
 
-    //             const element =
-    //                 positionMarker.getElement();
 
-    //             if (element) {
+        //         // Center map on user
+        //         map.setView(
+        //             [latitude, longitude],
+        //             map.getZoom() || 17
+        //         );
 
-    //                 const arrow =
-    //                     element.querySelector(
-    //                         ".direction-marker"
-    //                     );
 
-    //                 if (arrow) {
-    //                     arrow.style.transform =
-    //                         `rotate(${heading}deg)`;
-    //                 }
-    //             }
-    //         }
+        //         // Rotate direction arrow
+        //         if (heading !== null && !isNaN(heading)) {
 
-    //     },
+        //             const element =
+        //                 positionMarker.getElement();
 
-    //     function(error) {
+        //             if (element) {
 
-    //         console.error(
-    //             "GPS error:",
-    //             error.message
-    //         );
+        //                 const arrow =
+        //                     element.querySelector(
+        //                         ".direction-marker"
+        //                     );
 
-    //         alert(
-    //             "Unable to get your position: " +
-    //             error.message
-    //         );
+        //                 if (arrow) {
+        //                     arrow.style.transform =
+        //                         `rotate(${heading}deg)`;
+        //                 }
+        //             }
+        //         }
 
-    //     },
+        //     },
 
-    //     {
-    //         enableHighAccuracy: true,
-    //         maximumAge: 1000,
-    //         timeout: 10000
-    //     }
+        //     function(error) {
 
-    // );
+        //         console.error(
+        //             "GPS error:",
+        //             error.message
+        //         );
+
+        //         alert(
+        //             "Unable to get your position: " +
+        //             error.message
+        //         );
+
+        //     },
+
+        //     {
+        //         enableHighAccuracy: true,
+        //         maximumAge: 1000,
+        //         timeout: 10000
+        //     }
+
+        // );
+
+    };
 
 </script>
 
+</head>
+
+<body onload="init()">
+
+    <div id="map"></div>
+    <div id="debug">
+        <div id="debug-latitude"></div>
+        <div id="debug-longitude"></div>
+        <div id="debug-accuracy"></div>
+        <div id="debug-heading"></div>
+        <div id="debug-speed"></div>
+        <div id="debug-alpha"></div>
+        <div id="debug-webkit-compass-heading"></div>
+    </div>
+    <button id="start-compass" onclick="init_compass()">
+        Start Compass
+    </button>
 </body>
 </html>
