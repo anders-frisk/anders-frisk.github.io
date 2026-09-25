@@ -71,6 +71,7 @@
             width: 4rem;
             height: 4rem;
             font-size: 1.5rem;
+            display: none;
         }
 
         #zoom-in {
@@ -80,6 +81,12 @@
             width: 4rem;
             height: 4rem;
             font-size: 1.5rem;
+            display: none;
+        }
+
+        body.nav-mode #zoom-out,
+        body.nav-mode #zoom-in {
+            display: block;
         }
 
         #debug {
