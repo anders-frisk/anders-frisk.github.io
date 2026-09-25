@@ -20,6 +20,15 @@
             overflow: hidden;
         }
 
+        #wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            overflow: hidden;
+        }
+
         #map {
             position: absolute;
             top: 0;
@@ -58,7 +67,7 @@
             bottom: 1rem;
             width: 4rem;
             height: 4rem;
-            font-size: 1.5rem;
+            font-size: 1rem;
         }
 
         #zoom-out {
@@ -412,22 +421,23 @@
 </head>
 
 <body onload="init()">
-
-    <div id="map"></div>
-    <div id="debug">
-        <div id="debug-latitude"></div>
-        <div id="debug-longitude"></div>
-        <div id="debug-accuracy"></div>
-        <div id="debug-heading"></div>
-        <div id="debug-speed"></div>
-        <div id="debug-absolute-alpha"></div>
-        <div id="debug-webkit-compass-heading"></div>
+    <div id="wrapper">
+        <div id="map"></div>
+        <div id="debug">
+            <div id="debug-latitude"></div>
+            <div id="debug-longitude"></div>
+            <div id="debug-accuracy"></div>
+            <div id="debug-heading"></div>
+            <div id="debug-speed"></div>
+            <div id="debug-absolute-alpha"></div>
+            <div id="debug-webkit-compass-heading"></div>
+        </div>
+        <button id="start-compass" onclick="init_compass()">
+            Start Compass
+        </button>
+        <button id="zoom-in" onclick="map.zoomIn()">+</button>
+        <button id="zoom-out" onclick="map.zoomOut()">−</button>
+        <button id="map-mode" onclick="toggle_map_mode()">-</button>
     </div>
-    <button id="start-compass" onclick="init_compass()">
-        Start Compass
-    </button>
-    <button id="zoom-in" onclick="map.zoomIn()">+</button>
-    <button id="zoom-out" onclick="map.zoomOut()">−</button>
-    <button id="map-mode" onclick="toggle_map_mode()">-</button>
 </body>
 </html>
