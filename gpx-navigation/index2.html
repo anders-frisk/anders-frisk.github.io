@@ -274,7 +274,7 @@
         {
             lastCompassUpdate = now;
             
-            alpha = event.alpha; // degrees
+            alpha = event.absolute ? event.alpha : null; //alpha = event.alpha; // degrees (only absolute values are reliable, absolute = true >> device is providing a true compass heading)
             webkitCompassHeading = event.webkitCompassHeading; // degrees
             
             request_refresh();
@@ -357,7 +357,7 @@
         }
 
 
-            // Get direction for the arrow. Compass takes precedence over heading
+        // Get direction for the arrow. Compass takes precedence over heading
         const direction = 
             webkitCompassHeading !== null && !isNaN(webkitCompassHeading)
                 ? webkitCompassHeading
