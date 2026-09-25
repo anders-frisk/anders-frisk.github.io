@@ -25,6 +25,13 @@
 
         #map {
             position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        body.nav-mode #map {
             top: -25%;
             left: -25%;
             width: 150%;
@@ -37,7 +44,7 @@
             border-left: 8px solid transparent;
             border-right: 8px solid transparent;
             border-bottom: 24px solid #1976d2;
-            transform-origin: 50% 100%;
+            transform-origin: 50% 66.666%;
         }
 
         #start-compass
@@ -46,6 +53,14 @@
             top: 100px;
             left: 0px;
             width: 100%;
+        }
+
+        #map-mode
+        {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            /* z-index: 1000; */
         }
 
         #debug
@@ -111,7 +126,7 @@
                 className: "",
                 html: '<div class="direction-marker"></div>',
                 iconSize: [16, 24],
-                iconAnchor: [8, 24]
+                iconAnchor: [8, 16]
                 });
     };
 
@@ -263,13 +278,16 @@
             }
         }
 
-        if (latitude !== null && longitude !== null) {
-            // Center map on user
-            map.setView(
-                [latitude, longitude],
-                map.getZoom() || 17
-            );
+        // Center map on user
+        if (mode === MAP_MODE.NAV) {
+            if (latitude !== null && longitude !== null) {
+                map.setView(
+                    [latitude, longitude],
+                    map.getZoom() || 17
+                );
+            }
         }
+
 
 
         // Get direction for the arrow. Compass takes precedence over heading
@@ -288,18 +306,53 @@
             arrow.style.transform =
             `rotate(${direction}deg)`;
         }
-              
+        
+        
         // Rotate map
-        const mapElement = qs("#map");
-        if (mapElement) {
-            mapElement.style.transform = `rotate(${-direction}deg)`;
+        if (mode === MAP_MODE.NAV) {
+            const mapElement = qs("#map");
+            if (mapElement) {
+                mapElement.style.transform = `rotate(${-direction}deg)`;
+            }
+        }
+        else
+        {
+            const mapElement = qs("#map");
+            if (mapElement) {
+                mapElement.style.transform = `rotate(0deg)`;
+            }
         }
 
     };
 
 
 
+
+
+    const MAP_MODE = {
+        MAP: "map",
+        NAV: "nav"
+    };
+
+    let mode = null;
+
+    const toggle_map_mode = () => 
+        mode === MAP_MODE.MAP ? set_map_mode(MAP_MODE.NAV) : set_map_mode(MAP_MODE.MAP);
+
+    const set_map_mode = (newMode) => {
+        mode = newMode;
+        qs("#map-mode").textContent = mode === MAP_MODE.MAP ? "NAV" : "MAP";
+        if (mode === MAP_MODE.NAV) {
+            document.body.classList.add("nav-mode");
+        } else {
+            document.body.classList.remove("nav-mode");
+        }
+        request_refresh();
+    };
+
+
     const init = () => {
+        set_map_mode(MAP_MODE.MAP); // Set initial map mode to MAP
         init_map();
         init_gps();
         //init_compass(); // Must be started manually by the user due to permission requirements
@@ -324,5 +377,6 @@
     <button id="start-compass" onclick="init_compass()">
         Start Compass
     </button>
+    <button id="map-mode" onclick="toggle_map_mode()">-</button>
 </body>
 </html>
