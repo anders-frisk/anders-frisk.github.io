@@ -67,7 +67,8 @@
         <div id="debug-accuracy"></div>
         <div id="debug-heading"></div>
         <div id="debug-speed"></div>
-        <div id="debug-compass"></div>
+        <div id="debug-alpha"></div>
+        <div id="debug-webkit-compass-heading"></div>
     </div>
     <button id="start-compass" onclick="init_compass()">
         Start Compass
@@ -87,7 +88,8 @@
     let accuracy = null;
     let heading = null;
     let speed = null;
-    let compass = null;
+    let alpha = null;
+    let webkitCompassHeading = null;
 
     const init_gps = async () => {
         navigator.geolocation.watchPosition(
@@ -237,6 +239,10 @@
         }
     };
 
+
+
+
+
     const handle_gps = (position) => {
         latitude = position.coords.latitude;
         longitude = position.coords.longitude;
@@ -246,32 +252,41 @@
 
         request_refresh();
 
-        // console.log({
-        //     latitude,
-        //     longitude,
-        //     accuracy,
-        //     heading,
-        //     speed,
-        // });
-
-        document.querySelector("#debug-latitude").textContent = "lat: " + latitude;
-        document.querySelector("#debug-longitude").textContent = "lon: " + longitude;
-        document.querySelector("#debug-accuracy").textContent = "acc: " + accuracy + "m";
-        document.querySelector("#debug-heading").textContent = "head: " + heading + "°";
+        document.querySelector("#debug-latitude").textContent = "lat: " + (latitude ? latitude.toFixed(6) : "-");
+        document.querySelector("#debug-longitude").textContent = "lon: " + (longitude ? longitude.toFixed(6) : "-");
+        document.querySelector("#debug-accuracy").textContent = "acc: " + (accuracy ? accuracy.toFixed(1) + "m" : "-");
+        document.querySelector("#debug-heading").textContent = "head: " + (heading ? heading.toFixed(1) + "°" : "-");
         document.querySelector("#debug-speed").textContent = "speed: " + (speed ? (speed * 3.6).toFixed(1) + "km/h" : "-");
     };
 
+
+
+
+
+    let lastCompassUpdate = 0;
+    const compassInterval = 100; // ms = 10 Hz
+
     const handle_compass = (event) => {
-        compass = event.alpha;  // degrees
 
-        request_refresh();
+        const now = performance.now();
 
-        document.querySelector("#debug-compass").textContent = "compass: " + compass + "°";
+        if (now - lastCompassUpdate > compassInterval)
+        {
+            lastCompassUpdate = now;
+            
+            alpha = event.alpha; // degrees
+            webkitCompassHeading = event.webkitCompassHeading; // degrees
+            
+            request_refresh();
 
-        // console.log({
-        //     compass
-        // });
+            document.querySelector("#debug-alpha").textContent = "alpha: " + (alpha ? alpha.toFixed(1) + "°" : "-");
+            document.querySelector("#debug-webkit-compass-heading").textContent = "webkitCompassHeading: " + (webkitCompassHeading ? webkitCompassHeading.toFixed(1) + "°" : "-");
+        }
     };
+
+
+
+
 
     let request_refresh_pending = false;
 
@@ -343,11 +358,14 @@
 
 
             // Get direction for the arrow. Compass takes precedence over heading
-        const direction = compass !== null && !isNaN(compass)
-            ? (180 - compass + 360) % 360
-            : heading !== null && !isNaN(heading)
-                ? heading
-                : 0;
+        const direction = 
+            webkitCompassHeading !== null && !isNaN(webkitCompassHeading)
+                ? webkitCompassHeading
+                : alpha !== null && !isNaN(alpha)
+                    ? (180 - alpha + 360) % 360
+                    : heading !== null && !isNaN(heading)
+                        ? heading
+                        : 0;
 
         // Rotate arrow
         const arrow = positionMarker.getElement()?.querySelector(".direction-marker");
