@@ -55,19 +55,34 @@
             width: 100%;
         }
 
-        #map-mode
-        {
+        #map-mode {
             position: absolute;
             right: 1rem;
             bottom: 1rem;
-            /* z-index: 1000; */
-
             width: 4rem;
             height: 4rem;
+            font-size: 1.5rem;
         }
 
-        #debug
-        {
+        #zoom-out {
+            position: absolute;
+            right: 1rem;
+            bottom: 6rem;
+            width: 4rem;
+            height: 4rem;
+            font-size: 1.5rem;
+        }
+
+        #zoom-in {
+            position: absolute;
+            right: 1rem;
+            bottom: 11rem;
+            width: 4rem;
+            height: 4rem;
+            font-size: 1.5rem;
+        }
+
+        #debug {
             position: absolute;
             bottom: 0px;
             left: 0px;
@@ -358,9 +373,23 @@
         if (mode === MAP_MODE.NAV) {
             document.body.classList.add("nav-mode");
             map.invalidateSize();
+
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.scrollWheelZoom.disable();
+            map.doubleClickZoom.disable();
+            map.boxZoom.disable();
+            map.keyboard.disable();
         } else {
             document.body.classList.remove("nav-mode");
             map.invalidateSize();
+
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.scrollWheelZoom.enable();
+            map.doubleClickZoom.enable();
+            map.boxZoom.enable();
+            map.keyboard.enable();
         }
         request_refresh();
     };
@@ -392,6 +421,8 @@
     <button id="start-compass" onclick="init_compass()">
         Start Compass
     </button>
+    <button id="zoom-in" onclick="map.zoomIn()">+</button>
+    <button id="zoom-out" onclick="map.zoomOut()">−</button>
     <button id="map-mode" onclick="toggle_map_mode()">-</button>
 </body>
 </html>
