@@ -61,6 +61,9 @@
             right: 1rem;
             bottom: 1rem;
             /* z-index: 1000; */
+
+            width: 4rem;
+            height: 4rem;
         }
 
         #debug
@@ -99,7 +102,7 @@
     let absolute_alpha = null;
     let webkit_compass_heading = null;
 
-    const init_map = async () => {
+    const init_map = () => {
         // Create map
         map = L.map("map", {
             zoomControl: false
@@ -128,9 +131,16 @@
                 iconSize: [16, 24],
                 iconAnchor: [8, 16]
                 });
+
+//map.getLatLng().latitude ?? 
+
+        map.setView(
+            [0, 0],
+            map.getZoom() || 17
+        );
     };
 
-    const init_gps = async () => {
+    const init_gps = () => {
         navigator.geolocation.watchPosition(
             handle_gps,
             function(error) { console.error("GPS error:", error.message); },
@@ -235,6 +245,9 @@
 
 
     const update_map = () => {
+
+
+        if (map === null) console.log("map is null");
 
 
         if (latitude !== null && longitude !== null) {
@@ -352,10 +365,10 @@
 
 
     const init = () => {
-        set_map_mode(MAP_MODE.MAP); // Set initial map mode to MAP
         init_map();
         init_gps();
         //init_compass(); // Must be started manually by the user due to permission requirements
+        set_map_mode(MAP_MODE.MAP); // Set initial map mode to MAP
     };
 
 </script>
