@@ -70,7 +70,12 @@
     const qs = (selector) => document.querySelector(selector);
 
     let map = null;
-    
+
+    let positionMarker = null;
+    let firstPosition = true;
+    let accuracyCircle = null;
+    let directionIcon = null;
+
     let latitude = null;
     let longitude = null;
     let accuracy = null;
@@ -105,8 +110,8 @@
             directionIcon = L.divIcon({
                 className: "",
                 html: '<div class="direction-marker"></div>',
-                iconSize: [24, 30],
-                iconAnchor: [12, 15]
+                iconSize: [16, 24],
+                iconAnchor: [8, 24]
                 });
     };
 
@@ -292,10 +297,7 @@
 
     };
 
-    let positionMarker = null;
-    let firstPosition = true;
-    let accuracyCircle = null;
-    let directionIcon = null;
+
 
     const init = () => {
         init_map();
