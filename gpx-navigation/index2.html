@@ -53,7 +53,8 @@
             position: absolute;
             bottom: 0px;
             left: 0px;
-            background-color: #FFFFFF;
+            right: 0px;
+            background-color: rgba(255, 255, 255, 0.8);
         }
     </style>
 
@@ -69,13 +70,14 @@
     const qs = (selector) => document.querySelector(selector);
 
     let map = null;
+    
     let latitude = null;
     let longitude = null;
     let accuracy = null;
     let heading = null;
     let speed = null;
-    let alpha = null;
-    let webkitCompassHeading = null;
+    let absolute_alpha = null;
+    let webkit_compass_heading = null;
 
     const init_map = async () => {
         // Create map
@@ -110,109 +112,8 @@
 
     const init_gps = async () => {
         navigator.geolocation.watchPosition(
-
             handle_gps,
-
-            // function(position) {
-
-            //     const latitude = position.coords.latitude;
-            //     const longitude = position.coords.longitude;
-            //     const accuracy = position.coords.accuracy;
-            //     const speed = position.coords.speed;
-
-            //     // GPS heading, in degrees
-            //     const heading = position.coords.heading;
-
-            //     // console.log({
-            //     //     latitude,
-            //     //     longitude,
-            //     //     accuracy,
-            //     //     heading
-            //     // });
-
-
-            //     // // Create marker the first time
-            //     // if (!positionMarker) {
-
-            //     //     positionMarker = L.marker(
-            //     //         [latitude, longitude],
-            //     //         {
-            //     //             icon: directionIcon
-            //     //         }
-            //     //     ).addTo(map);
-
-            //     // } else {
-
-            //     //     positionMarker.setLatLng([
-            //     //         latitude,
-            //     //         longitude
-            //     //     ]);
-
-            //     // }
-
-
-            //     // if (!accuracyCircle)
-            //     // {
-            //     //     accuracyCircle = L.circle(
-            //     //         [latitude, longitude],
-            //     //         {
-            //     //             radius: accuracy,
-            //     //             // Appearance
-            //     //             color: "#1976d2",
-            //     //             weight: 2,
-            //     //             fillColor: "#1976d2",
-            //     //             fillOpacity: 0.15
-            //     //         }
-            //     //     ).addTo(map);
-            //     // } else {
-            //     //     accuracyCircle.setLatLng([latitude, longitude]);
-            //     //     accuracyCircle.setRadius(accuracy);
-            //     // }
-
-
-            //     // // Center map on user
-            //     // map.setView(
-            //     //     [latitude, longitude],
-            //     //     map.getZoom() || 17
-            //     // );
-
-
-            //     // // Rotate direction arrow
-            //     // if (heading !== null && !isNaN(heading)) {
-
-            //     //     const element =
-            //     //         positionMarker.getElement();
-
-            //     //     if (element) {
-
-            //     //         const arrow =
-            //     //             element.querySelector(
-            //     //                 ".direction-marker"
-            //     //             );
-
-            //     //         if (arrow) {
-            //     //             arrow.style.transform =
-            //     //                 `rotate(${heading}deg)`;
-            //     //         }
-            //     //     }
-            //     // }
-
-            // },
-
-            function(error) {
-
-                console.error(
-                    "GPS error:",
-                    error.message
-                );
-
-                // alert(
-                //     "Unable to get your position: " +
-                //     error.message
-                // );
-
-            },
-
+            function(error) { console.error("GPS error:", error.message); },
             {
                 enableHighAccuracy: true,
                 maximumAge: 1000,
@@ -224,23 +125,16 @@
     const init_compass = async () => {
         if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
 
-            const permission =
-                await DeviceOrientationEvent.requestPermission();
+            const permission = await DeviceOrientationEvent.requestPermission();
 
             if (permission === "granted") {
-
                 window.addEventListener(
                     "deviceorientation",
                     handle_compass,
                     true
                 );
-
             } else {
-
-                alert(
-                    "Compass permission was denied."
-                );
-
+                alert("Compass permission was denied.");
             }
 
         } else {
@@ -291,13 +185,13 @@
         {
             lastCompassUpdate = now;
             
-            alpha = event.absolute ? event.alpha : null; //alpha = event.alpha; // degrees (only absolute values are reliable, absolute = true >> device is providing a true compass heading)
-            webkitCompassHeading = event.webkitCompassHeading; // degrees
+            absolute_alpha = event.absolute ? event.alpha : null; //alpha = event.alpha; // degrees (only absolute values are reliable, absolute = true >> device is providing a true compass heading)
+            webkit_compass_heading = event.webkitCompassHeading; // degrees
             
             request_refresh();
 
-            qs("#debug-alpha").textContent = "alpha: " + (alpha ? alpha.toFixed(1) + "°" : "-");
-            qs("#debug-webkit-compass-heading").textContent = "webkitCompassHeading: " + (webkitCompassHeading ? webkitCompassHeading.toFixed(1) + "°" : "-");
+            qs("#debug-absolute-alpha").textContent = "absoluteAlpha: " + (absolute_alpha ? absolute_alpha.toFixed(1) + "°" : "-");
+            qs("#debug-webkit-compass-heading").textContent = "webkitCompassHeading: " + (webkit_compass_heading ? webkit_compass_heading.toFixed(1) + "°" : "-");
         }
     };
 
@@ -308,16 +202,15 @@
     let request_refresh_pending = false;
 
     const request_refresh = () => {
-
-        if (request_refresh_pending) return;
-        request_refresh_pending = true;
-
-        window.queueMicrotask(() => {
-            request_refresh_pending = false;
-
-            update_map();
-        });
-
+        if (request_refresh_pending !== true)
+        {
+            request_refresh_pending = true;
+            
+            window.queueMicrotask(() => {
+                request_refresh_pending = false;
+                update_map();
+            });
+        }
     };
 
 
@@ -376,10 +269,10 @@
 
         // Get direction for the arrow. Compass takes precedence over heading
         const direction = 
-            webkitCompassHeading !== null && !isNaN(webkitCompassHeading)
-                ? webkitCompassHeading
-                : alpha !== null && !isNaN(alpha)
-                    ? (180 - alpha + 360) % 360
+            webkit_compass_heading !== null && !isNaN(webkit_compass_heading)
+                ? webkit_compass_heading
+                : absolute_alpha !== null && !isNaN(absolute_alpha)
+                    ? (180 - absolute_alpha + 360) % 360
                     : heading !== null && !isNaN(heading)
                         ? heading
                         : 0;
@@ -405,126 +298,9 @@
     let directionIcon = null;
 
     const init = () => {
-
         init_map();
         init_gps();
         //init_compass(); // Must be started manually by the user due to permission requirements
-
-        
-
-                
-
-
-        // // Watch GPS position
-        // navigator.geolocation.watchPosition(
-
-        //     function(position) {
-
-        //         const latitude = position.coords.latitude;
-        //         const longitude = position.coords.longitude;
-        //         const accuracy = position.coords.accuracy;
-
-        //         // GPS heading, in degrees
-        //         const heading = position.coords.heading;
-
-        //         // console.log({
-        //         //     latitude,
-        //         //     longitude,
-        //         //     accuracy,
-        //         //     heading
-        //         // });
-
-
-        //         // Create marker the first time
-        //         if (!positionMarker) {
-
-        //             positionMarker = L.marker(
-        //                 [latitude, longitude],
-        //                 {
-        //                     icon: directionIcon
-        //                 }
-        //             ).addTo(map);
-
-        //         } else {
-
-        //             positionMarker.setLatLng([
-        //                 latitude,
-        //                 longitude
-        //             ]);
-
-        //         }
-
-
-        //         if (!accuracyCircle)
-        //         {
-        //             accuracyCircle = L.circle(
-        //                 [latitude, longitude],
-        //                 {
-        //                     radius: accuracy,
-        //                     // Appearance
-        //                     color: "#1976d2",
-        //                     weight: 2,
-        //                     fillColor: "#1976d2",
-        //                     fillOpacity: 0.15
-        //                 }
-        //             ).addTo(map);
-        //         } else {
-        //             accuracyCircle.setLatLng([latitude, longitude]);
-        //             accuracyCircle.setRadius(accuracy);
-        //         }
-
-
-        //         // Center map on user
-        //         map.setView(
-        //             [latitude, longitude],
-        //             map.getZoom() || 17
-        //         );
-
-
-        //         // Rotate direction arrow
-        //         if (heading !== null && !isNaN(heading)) {
-
-        //             const element =
-        //                 positionMarker.getElement();
-
-        //             if (element) {
-
-        //                 const arrow =
-        //                     element.querySelector(
-        //                         ".direction-marker"
-        //                     );
-
-        //                 if (arrow) {
-        //                     arrow.style.transform =
-        //                         `rotate(${heading}deg)`;
-        //                 }
-        //             }
-        //         }
-
-        //     },
-
-        //     function(error) {
-
-        //         console.error(
-        //             "GPS error:",
-        //             error.message
-        //         );
-
-        //         alert(
-        //             "Unable to get your position: " +
-        //             error.message
-        //         );
-
-        //     },
-
-        //     {
-        //         enableHighAccuracy: true,
-        //         maximumAge: 1000,
-        //         timeout: 10000
-        //     }
-
-        // );
-
     };
 
 </script>
@@ -540,7 +316,7 @@
         <div id="debug-accuracy"></div>
         <div id="debug-heading"></div>
         <div id="debug-speed"></div>
-        <div id="debug-alpha"></div>
+        <div id="debug-absolute-alpha"></div>
         <div id="debug-webkit-compass-heading"></div>
     </div>
     <button id="start-compass" onclick="init_compass()">
