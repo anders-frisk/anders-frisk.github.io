@@ -17,8 +17,7 @@
             height: 100%;
             overflow: hidden;
             font-size: 16px;
-
-            touch-action: manipulation; /*This disables the browser’s double-tap page zoom while preserving pinch-to-zoom. It does not disable Leaflet’s own double-tap map zoom; that is controlled separately by map.doubleClickZoom. Test both on your iPhone after adding it, since the map handles touch gestures too. */
+            touch-action: manipulation;
         }
 
         #wrapper {
@@ -42,7 +41,7 @@
             top: -25%;
             left: -25%;
             width: 150%;
-            height: 175%;
+            height: 200%;
         }
 
         .direction-marker {
@@ -138,32 +137,34 @@
     const init_map = () => {
         // Create map
         map = L.map("map", {
-            zoomControl: false
-            });
+            zoomControl: false,
+            minZoom: 5,
+            maxZoom: 19,
+        });
             
-            // OpenStreetMap tiles
-            // L.tileLayer(
-                //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                //     {
-                    //         maxZoom: 19,
-                    //         attribution: "&copy; OpenStreetMap contributors"
-                    //     }
-                    // ).addTo(map);
-                    
-            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-            
-            
-            L.polyline(halmstad_epic).addTo(map);
-            //map.fitBounds(L.polyline(coordinates).getBounds());
-            
-            
-            // Create direction marker
-            directionIcon = L.divIcon({
-                className: "",
-                html: '<div class="direction-marker"></div>',
-                iconSize: [16, 24],
-                iconAnchor: [8, 16]
-                });
+        // OpenStreetMap tiles
+        // L.tileLayer(
+            //     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            //     {
+                //         maxZoom: 19,
+                //         attribution: "&copy; OpenStreetMap contributors"
+                //     }
+                // ).addTo(map);
+                
+        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+        
+        
+        L.polyline(halmstad_epic).addTo(map);
+        //map.fitBounds(L.polyline(coordinates).getBounds());
+        
+        
+        // Create direction marker
+        directionIcon = L.divIcon({
+            className: "",
+            html: '<div class="direction-marker"></div>',
+            iconSize: [16, 24],
+            iconAnchor: [8, 16]
+        });
 
 //map.getLatLng().latitude ?? 
 
@@ -319,7 +320,7 @@
                         radius: accuracy,
                         // Appearance
                         color: "#1976d2",
-                        weight: 2,
+                        weight: 1,
                         fillColor: "#1976d2",
                         fillOpacity: 0.15
                     }
