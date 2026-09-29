@@ -335,8 +335,8 @@
         if (mode === MAP_MODE.NAV) {
             if (latitude !== null && longitude !== null) {
                 map.setView(
-                    [latitude, longitude],
-                    /*map.getZoom() ||*/ 17
+                    [latitude, longitude]//,
+                    //map.getZoom() || 17
                 );
             }
         }
