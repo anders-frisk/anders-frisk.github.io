@@ -39,8 +39,8 @@
 
         body.nav-mode #map {
             top: calc(75% - 90vmax);
-            left: calc(50% - 70vmax);
-            width: 140vmax;
+            left: calc(50% - 90vmax);
+            width: 180vmax;
             height: 180vmax;
         }
 
@@ -437,7 +437,7 @@
 <body onload="init()">
     <div id="wrapper">
         <div id="map"></div>
-        <div id="debug">
+        <div id="debug" style="display: none;">
             <div id="debug-latitude"></div>
             <div id="debug-longitude"></div>
             <div id="debug-accuracy"></div>
@@ -445,7 +445,7 @@
             <div id="debug-speed"></div>
             <div id="debug-absolute-alpha"></div>
             <div id="debug-webkit-compass-heading"></div>
-            <div>5</div>
+            <div>6</div>
         </div>
         <button id="start-compass" onclick="init_compass()">
             Start Compass
