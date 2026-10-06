@@ -231,8 +231,8 @@
     };
 
     const resizeObserver = new ResizeObserver((entries) => {
-        alert("resize");
-        map?.invalidateSize();
+        //alert("resize");
+        window.setTimeout(() => { map?.invalidateSize(); }, 1000);
     });
 
 
@@ -467,7 +467,7 @@
         <button id="start-compass" onclick="init_compass()">
             Start Compass
         </button>
-        <button id="map-style">3</button>
+        <button id="map-style">4</button>
         <button id="zoom-in" onclick="map.zoomIn()">+</button>
         <button id="zoom-out" onclick="map.zoomOut()">−</button>
         <button id="map-mode" onclick="toggle_map_mode()">-</button>
