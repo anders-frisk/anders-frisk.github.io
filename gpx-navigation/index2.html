@@ -142,7 +142,7 @@
         map = L.map("map", {
             zoomControl: false,
             minZoom: 5,
-            maxZoom: 19,
+            maxZoom: 18,
         });
             
         // OpenStreetMap tiles
@@ -281,6 +281,7 @@
     };
 
 
+    //let last_mode = null;
     const update_map = () => {
 
 
@@ -334,7 +335,7 @@
             }
         }
 
-        // Center map on user
+        // Center map on user when in navigation mode
         if (mode === MAP_MODE.NAV) {
             if (latitude !== null && longitude !== null) {
                 map.setView(
@@ -344,7 +345,18 @@
             }
         }
 
-
+        
+        // if (mode !== last_mode) {
+        //     if (latitude !== null && longitude !== null) {
+        //         last_mode = mode;
+        //         if (mode === MAP_MODE.MAP) {
+        //             map.setView(
+        //                 [latitude, longitude]//,
+        //                 //map.getZoom() || 17
+        //             );
+        //         }
+        //     }
+        // }
 
         // Get direction for the arrow. Compass takes precedence over heading
         const direction = 
@@ -451,7 +463,7 @@
             Start Compass
         </button>
         <button id="zoom-in" onclick="map.zoomIn()">+</button>
-        <button id="zoom-out" onclick="map.zoomOut()">−</button>
+        <button id="zoom-out" onclick="map.zoomOut()">-</button>
         <button id="map-mode" onclick="toggle_map_mode()">-</button>
     </div>
 </body>
