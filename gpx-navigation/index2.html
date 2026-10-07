@@ -127,7 +127,7 @@
     <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
     <link href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet" />
 
-    <script src="halmstad_epic.js"></script>
+    <script src="halmstad_epic_2026.js"></script>
 
 <script>
 
@@ -168,7 +168,7 @@
         L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
         
         
-        L.polyline(halmstad_epic).addTo(map);
+        L.polyline(halmstad_epic_2026).addTo(map);
         //map.fitBounds(L.polyline(coordinates).getBounds());
         
         
@@ -478,7 +478,7 @@
         <button id="start-compass" onclick="init_compass()">
             Start Compass
         </button>
-        <button id="map-style">5</button>
+        <button id="map-style">6</button>
         <button id="zoom-in" onclick="map.zoomIn()">+</button>
         <button id="zoom-out" onclick="map.zoomOut()">-</button>
         <button id="map-mode" onclick="toggle_map_mode()">-</button>

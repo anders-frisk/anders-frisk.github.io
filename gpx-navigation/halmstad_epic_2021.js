@@ -1,4 +1,4 @@
-const halmstad_epic = [
+const halmstad_epic_2021 = [
     [
         "56.654425",
         "12.77979"
