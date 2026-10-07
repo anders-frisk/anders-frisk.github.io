@@ -127,6 +127,7 @@
     <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
     <link href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet" />
 
+    <script src="halmstad_epic_2021.js"></script>
     <script src="halmstad_epic_2026.js"></script>
 
 <script>
@@ -168,7 +169,8 @@
         L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
         
         
-        L.polyline(halmstad_epic_2026).addTo(map);
+        L.polyline(halmstad_epic_2021, { color: 'blue' }).addTo(map);
+        L.polyline(halmstad_epic_2026, { color: 'red' }).addTo(map);
         //map.fitBounds(L.polyline(coordinates).getBounds());
         
         
