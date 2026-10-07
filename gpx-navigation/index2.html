@@ -63,11 +63,11 @@
 
         #map-mode {
             position: absolute;
-            right: 1rem;
+            left: 1rem;
             bottom: 1rem;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 1.5rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 2rem;
             font-size: 1rem;
             padding: 0;
         }
@@ -75,10 +75,10 @@
         #zoom-out {
             position: absolute;
             right: 1rem;
-            bottom: 5rem;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 1.5rem;
+            bottom: 1rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 2rem;
             font-size: 1.5rem;
             display: none;
             padding: 0;
@@ -87,10 +87,10 @@
         #zoom-in {
             position: absolute;
             right: 1rem;
-            bottom: 9rem;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 1.5rem;
+            bottom: 6rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 2rem;
             font-size: 1.5rem;
             display: none;
             padding: 0;
@@ -100,9 +100,9 @@
             position: absolute;
             right: 1rem;
             top: 1rem;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 1.5rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 2rem;
             font-size: 1rem;
             padding: 0;
         }
@@ -474,12 +474,11 @@
             <div id="debug-speed"></div>
             <div id="debug-absolute-alpha"></div>
             <div id="debug-webkit-compass-heading"></div>
-            <div>6</div>
         </div>
         <button id="start-compass" onclick="init_compass()">
             Start Compass
         </button>
-        <button id="map-style">4</button>
+        <button id="map-style">5</button>
         <button id="zoom-in" onclick="map.zoomIn()">+</button>
         <button id="zoom-out" onclick="map.zoomOut()">-</button>
         <button id="map-mode" onclick="toggle_map_mode()">-</button>
