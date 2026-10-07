@@ -125,6 +125,7 @@
          <!-- <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" /> -->
 
     <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
     <link href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet" />
 
     <script src="halmstad_epic_2021.js"></script>
@@ -163,10 +164,68 @@
         topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxNativeZoom: 17, maxZoom: 18, attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="https://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)' });
         
         
-        L.polyline(halmstad_epic_2021, { color: 'blue' }).addTo(map);
-        L.polyline(halmstad_epic_2026, { color: 'red' }).addTo(map);
+        const epic2021Line = L.polyline(halmstad_epic_2021, { color: 'blue', weight: 2 }).addTo(map); //weight: 2
+        const epic2026Line = L.polyline(halmstad_epic_2026, { color: 'red', weight: 2 }).addTo(map);
         //map.fitBounds(L.polyline(coordinates).getBounds());
+
+        const epic2021arrows = L.polylineDecorator(epic2021Line, {
+            patterns: [
+                {
+                    offset: 25,
+                    repeat: 50,
+                    symbol: L.Symbol.arrowHead({
+                        pixelSize: 12,
+                        polygon: false,
+                        pathOptions: {
+                            stroke: true,
+                            color: "blue",
+                            weight: 2
+                        }
+                    })
+                }
+            ]
+        }).addTo(map);
+
+        const epic2026arrows = L.polylineDecorator(epic2026Line, {
+            patterns: [
+                {
+                    offset: 25,
+                    repeat: 50,
+                    symbol: L.Symbol.arrowHead({
+                        pixelSize: 12,
+                        polygon: false,
+                        pathOptions: {
+                            stroke: true,
+                            color: "red",
+                            weight: 2
+                        }
+                    })
+                }
+            ]
+        }).addTo(map);
         
+    // const routeDecorator = L.polylineDecorator(epic2026Line, {
+    //     patterns: [
+    //         {
+    //             offset: 30,
+    //             repeat: 80,
+
+    //             symbol: L.Symbol.arrowHead({
+    //                 pixelSize: 10,
+    //                 polygon: true,
+
+    //                 pathOptions: {
+    //                     color: "#ffffff",      // outline
+    //                     weight: 2,
+    //                     opacity: 1,
+    //                     fillColor: "#d97706",
+    //                     fillOpacity: 1
+    //                 }
+    //             })
+    //         }
+    //     ]
+    // }).addTo(map);
+
         
         // Create direction marker
         directionIcon = L.divIcon({
