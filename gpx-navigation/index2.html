@@ -31,13 +31,13 @@
 
         #map {
             position: absolute;
-            top: 0;
+            /* top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
-        }
+            height: 100%; */
+        /* }
 
-        body.nav-mode #map {
+        body.nav-mode #map { */
             top: calc(75% - 90vmax);
             left: calc(50% - 90vmax);
             width: 180vmax;
@@ -161,6 +161,7 @@
     const pathBreakDistance = 100;
     const pathMaxAccuracy = 10;
     const pathStorageKey = "gpx-navigation.walkedSegments.v1";
+    const pathStorageLifetime = 12 * 60 * 60 * 1000;
 
     let latitude = null;
     let longitude = null;
@@ -177,8 +178,13 @@
                 return;
             }
 
-            const segments = JSON.parse(storedPath);
-            const restoredSegments = segments.map(segment =>
+            const savedPath = JSON.parse(storedPath);
+            if (!Number.isFinite(savedPath?.expiresAt) || savedPath.expiresAt <= Date.now()) {
+                localStorage.removeItem(pathStorageKey);
+                return;
+            }
+
+            const restoredSegments = savedPath.segments.map(segment =>
                 segment.map(point => L.latLng(point[0], point[1]))
             );
             walkedSegments.length = 0;
@@ -195,7 +201,10 @@
             const segments = walkedSegments.map(segment =>
                 segment.map(point => [point.lat, point.lng])
             );
-            localStorage.setItem(pathStorageKey, JSON.stringify(segments));
+            localStorage.setItem(pathStorageKey, JSON.stringify({
+                expiresAt: Date.now() + pathStorageLifetime,
+                segments
+            }));
         } catch (error) {
             console.warn("Could not save path:", error);
         }
@@ -311,7 +320,7 @@
         //    map.getZoom() || 17
         //);
 
-        resizeObserver.observe(qs("#map"));
+        //resizeObserver.observe(qs("#map"));
     };
 
     const toggle_map_style = () => {
@@ -335,37 +344,34 @@
     };
 
     const init_compass = async () => {
-        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+        if (typeof DeviceOrientationEvent === "undefined") {
+            return;
+        }
 
-            const permission = await DeviceOrientationEvent.requestPermission();
-
-            if (permission === "granted") {
-                window.addEventListener(
-                    "deviceorientation",
-                    handle_compass,
-                    true
-                );
-            } else {
-                alert("Compass permission was denied.");
+        try {
+            if (typeof DeviceOrientationEvent.requestPermission === "function") {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission !== "granted") {
+                    alert("Compass permission was denied.");
+                    return;
+                }
             }
-
-        } else {
-
-            // Android / browsers that don't require
-            // explicit permission
 
             window.addEventListener(
                 "deviceorientation",
                 handle_compass,
                 true
             );
+            qs("#start-compass").hidden = true;
+        } catch (error) {
+            console.warn("Could not start compass:", error);
         }
     };
 
-    const resizeObserver = new ResizeObserver((entries) => {
-        //alert("resize");
-        window.setTimeout(() => { map?.invalidateSize(); }, 1000);
-    });
+    // const resizeObserver = new ResizeObserver((entries) => {
+    //     //alert("resize");
+    //     window.setTimeout(() => { map?.invalidateSize(); }, 1000);
+    // });
 
 
 
@@ -483,7 +489,7 @@
                 // Center the map on the user's position when the marker is first created (first map render)
                 map.setView(
                     [latitude, longitude],
-                    /*map.getZoom() ||*/ 17
+                    /*map.getZoom() ||*/ 18
                 );
 
             } else {
@@ -601,6 +607,8 @@
             map.doubleClickZoom.disable();
             map.boxZoom.disable();
             map.keyboard.disable();
+
+            //map.setZoom(18);
         } else {
             document.body.classList.remove("nav-mode");
             //map.invalidateSize();
@@ -617,6 +625,7 @@
 
 
     const init = () => {
+        qs("#start-compass").hidden = typeof DeviceOrientationEvent === "undefined";
         init_map();
         init_gps();
         //init_compass(); // Must be started manually by the user due to permission requirements
@@ -639,7 +648,7 @@
             <div id="debug-absolute-alpha"></div>
             <div id="debug-webkit-compass-heading"></div>
         </div>
-        <button id="start-compass" onclick="init_compass()">
+        <button id="start-compass" onclick="init_compass()" hidden>
             Start Compass
         </button>
         <button id="map-style" onclick="toggle_map_style()">#</button>
