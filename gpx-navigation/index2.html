@@ -107,6 +107,17 @@
             padding: 0;
         }
 
+        #reset-path {
+            position: absolute;
+            left: 1rem;
+            bottom: 6rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 2rem;
+            font-size: 1rem;
+            padding: 0;
+        }
+
         body.nav-mode #zoom-out,
         body.nav-mode #zoom-in {
             display: block;
@@ -144,6 +155,13 @@
     let accuracyCircle = null;
     let directionIcon = null;
 
+    const walkedSegments = [];
+    let walkedLine = null;
+    const pathMinDistance = 5;
+    const pathBreakDistance = 100;
+    const pathMaxAccuracy = 10;
+    const pathStorageKey = "gpx-navigation.walkedSegments.v1";
+
     let latitude = null;
     let longitude = null;
     let accuracy = null;
@@ -152,7 +170,46 @@
     let absolute_alpha = null;
     let webkit_compass_heading = null;
 
+    const restore_path = () => {
+        try {
+            const storedPath = localStorage.getItem(pathStorageKey);
+            if (storedPath === null) {
+                return;
+            }
+
+            const segments = JSON.parse(storedPath);
+            const restoredSegments = segments.map(segment =>
+                segment.map(point => L.latLng(point[0], point[1]))
+            );
+            walkedSegments.length = 0;
+            for (const segment of restoredSegments) {
+                walkedSegments.push(segment);
+            }
+        } catch (error) {
+            console.warn("Could not restore path:", error);
+        }
+    };
+
+    const save_path = () => {
+        try {
+            const segments = walkedSegments.map(segment =>
+                segment.map(point => [point.lat, point.lng])
+            );
+            localStorage.setItem(pathStorageKey, JSON.stringify(segments));
+        } catch (error) {
+            console.warn("Could not save path:", error);
+        }
+    };
+
+    const reset_path = () => {
+        //localStorage.removeItem(pathStorageKey);
+        walkedSegments.length = 0;
+        save_path();
+    };
+
     const init_map = () => {
+        restore_path();
+
         // Create map
         map = L.map("map", {
             zoomControl: false,
@@ -233,6 +290,12 @@
     // }).addTo(map);
 
         
+        walkedLine = L.polyline(walkedSegments, {
+            color: "#1976d2",
+            weight: 4,
+            interactive: false
+        }).addTo(map);
+
         // Create direction marker
         directionIcon = L.divIcon({
             className: "",
@@ -307,6 +370,37 @@
 
 
 
+    const record_path = () => {
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+            !Number.isFinite(accuracy) || accuracy < 0 || accuracy > pathMaxAccuracy) {
+            return;
+        }
+
+        const currentPoint = L.latLng(latitude, longitude);
+        const currentSegment = walkedSegments[walkedSegments.length - 1];
+
+        if (!currentSegment) {
+            walkedSegments.push([currentPoint]);
+        } else {
+            const lastPoint = currentSegment[currentSegment.length - 1];
+            const distance = lastPoint.distanceTo(currentPoint);
+
+            if (distance < pathMinDistance) {
+                return;
+            }
+
+            if (distance > pathBreakDistance) {
+                walkedSegments.push([currentPoint]);
+            } else {
+                currentSegment.push(currentPoint);
+            }
+        }
+
+        walkedLine.setLatLngs(walkedSegments);
+        save_path();
+    };
+
     const handle_gps = (position) => {
         latitude = position.coords.latitude;
         longitude = position.coords.longitude;
@@ -314,6 +408,7 @@
         speed = position.coords.speed; // m/s
         heading = position.coords.heading; // degrees
 
+        record_path();
         request_refresh();
 
         qs("#debug-latitude").textContent = "lat: " + (latitude ? latitude.toFixed(6) : "-");
@@ -551,6 +646,9 @@
         <button id="zoom-in" onclick="map.zoomIn()">+</button>
         <button id="zoom-out" onclick="map.zoomOut()">-</button>
         <button id="map-mode" onclick="toggle_map_mode()">-</button>
+        <button id="reset-path" onclick="confirm('Are you sure to reset the path?') && reset_path()">
+            Reset
+        </button>
     </div>
 </body>
 </html>
