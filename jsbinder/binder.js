@@ -8,17 +8,18 @@
  * JSBinder provides declarative data binding through HTML data attributes:
  * 
  * Directives:
+ * - data-bind: Binding state to elements
  * - data-if: Conditional rendering
  * - data-each: List rendering with keys, where clauses, ordering
  * - data-for: Range-based iteration
- * - data-bind: Two-way data binding
  * - data-attr: Dynamic attributes
  * - data-class: Conditional CSS classes
  * - data-style: Dynamic inline styles
+ * - data-template / data-render: Template definition and rendering
+ * 
+ * Reversed Directives:
  * - data-onclick: Click event handlers with state mutations
  * - data-onchange: Change event handlers for form inputs
- * - data-template: Reusable templates
- * - data-render: Template rendering
  * 
  * Interpolation:
  * - {{expression}}: Evaluate expressions in text content or attributes
@@ -41,57 +42,88 @@
 class JSBinder
 {
     /**
-     * Creates a new JSBinder instance and attaches it to a root element.
+     * Creates a new JSBinder instance on any "app" or "component" HTML element.
      * 
-     * @param {Object} [options={}] - Configuration options for the JSBinder instance.
-     * @param {HTMLElement} [options.root=document.body] - The root DOM element to bind to. All bindings will be scoped to this element and its descendants.
-     * 
-     * @example
-     * // Bind to document.body (default)
-     * const binder = new JSBinder();
+     * @param {HTMLElement} [root] - The root DOM element to bind to. All bindings will be scoped to this element and its descendants.
      * 
      * @example
-     * // Bind to specific element
-     * const binder = new JSBinder({ root: document.querySelector('#app') });
+     * const binder = new JSBinder(document.querySelector('#app'));
      */
-    constructor(options = {})
+    constructor(root)
     {
-        if (!JSBinder.#isPlainObject(options))
-            throw new Error(JSBinder.#message(`'options' must be an object`));
-
-        this.#settings = { root: document.body, ...options };
+        this.#root = root;
         
-        if (!this.#settings.root)
+        if (!this.#root)
             throw new Error(JSBinder.#message('Can not find the root element'));
 
-        if (this.#settings.root.attributes.hasOwnProperty("data-jsbinder"))
+        if (this.#root.attributes.hasOwnProperty("data-jsbinder"))
             throw new Error(JSBinder.#message('An instance of JSBinder already exists on this root'));
 
-        this.#settings.root.dataset.jsbinder = "";
+        this.#root.dataset.jsbinder = "";
 
         this.#abortController = new AbortController();
+        JSBinder.#removeObserver.watch(this.#root, this);
     };
 
     #abortController;
-    #settings;
+    #root;
+
+    static #removeObserver = class RemoveObserver {
+        static #elements = new Map();
+        static #isObserving = false;
+
+        static #observer = new MutationObserver(() => {
+            for (const [element, instance] of this.#elements) {
+                if (!element.isConnected) {
+                    this.#elements.delete(element);
+                    instance.dispose?.();
+                }
+            }
+            if (this.#elements.size === 0) this.#stop();
+        });
+
+        static watch(element, instance) {
+            this.#elements.set(element, instance);
+            if (!this.#isObserving) this.#start();
+        };
+
+        static #start() {
+            this.#observer.observe(document.documentElement, { childList: true, subtree: true });
+            this.#isObserving = true;
+        };
+
+        static #stop() {
+            this.#observer.disconnect();
+            this.#isObserving = false;
+        };
+    };
 
     static #message = (msg) => `JSBinder: ${msg}`;
     static #error = (msg) => console.error(JSBinder.#message(msg));
     static #info = (msg) => console.info(JSBinder.#message(msg));
     static #warn = (msg) => console.warn(JSBinder.#message(msg));
 
+    // Returns first element if array has one element, otherwise returns the array itself.
+    // ["aa"] >> "aa", ["aa", "bb", ...] >> ["aa", "bb", ...]
     static #unwrapSingleArray = (x) => (Array.isArray(x) && x.length === 1) ? x[0] : x;
 
     static #isPlainObject = (obj) => obj !== null && typeof obj === 'object' && !Array.isArray(obj);
-    static #isNullish = (x) => [undefined, null, ""].includes(x);
+    static #isNullish = (x) => x === undefined || x === null || x === "";
 
     // Removes and returnes one or more dataset attributes from a DOM element as list or single.
     static #consumeDataset = (obj) => (...keys) => JSBinder.#unwrapSingleArray(keys.map(key => { const data = obj.dataset[key]?.trim().replace(/\s\s+/g, " ") ?? null; obj.removeAttribute(`data-${key}`); return data; }));
-    static #split = (input) => input.split(";").map(x => x.trim()).filter(x => x !== ""); // Improvement: Do not split inside any strings. 
+
+    // Splits a string by semicolons, ignoring semicolons inside quotes or escaped characters.
+    static #split = (input) => 
+        input
+            .split(/;(?=(?:[^"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*$)/)
+            .map(x => x.trim())
+            .filter(x => x !== "");
 
     // Clean HTML string from comments etc.
     static #cleanHTML = (html) => 
-        html.trim()
+        html
+            .trim()
             .replace(/<!--[\s\S]*?-->/g, "")
             .replace(/\s\s+/g, " ")
             .replace(/>\s+</g, "><");
@@ -117,10 +149,18 @@ class JSBinder
             .filter(x => !x.match(/^\{([a-zA-Z0-9_]+)\}$/)) // Skip full {index_key}
             .filter(x => !x.match(/^\d+$/)); // Skip full integers
 
-    static #alphaNumericSorter = new class {
-        #isNumeric = (val) => typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)));
-        sort = (a, b) => JSBinder.#apply(this.#isNumeric(a), this.#isNumeric(b))((aIsNum, bIsNum) => { if (aIsNum && !bIsNum) return 1; if (!aIsNum && bIsNum) return -1; if (aIsNum && bIsNum) return parseFloat(a) - parseFloat(b); return a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }); });
+    static #alphaNumericSorter = new class AlphaNumericSorter {
+        static #isNumeric = (val) => typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)));
+        sort = (a, b) => JSBinder.#apply(AlphaNumericSorter.#isNumeric(a), AlphaNumericSorter.#isNumeric(b))((aIsNum, bIsNum) => { if (aIsNum && !bIsNum) return 1; if (!aIsNum && bIsNum) return -1; if (aIsNum && bIsNum) return parseFloat(a) - parseFloat(b); return a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }); });
     };
+
+    // `structuredClone` available from Chrome 98 (Jan 2022), Firefox 94 (Nov 2021), Safari 15.4 (Mar 2022), Edge 98 (Jan 2022).`
+    static #structuredClonePolyfill = (value) => typeof window.structuredClone !== "undefined" ? window.structuredClone(value) : JSON.parse(JSON.stringify(value));
+
+    // Returns the difference between two arrays as sets of outgoing and incoming elements.
+    static #diff = (a, b) => { const setA = new Set(a); const setB = new Set(b); return { outgoing: new Set(a.filter(x => !setB.has(x))), incoming: new Set(b.filter(x => !setA.has(x))) }; };
+
+    static #BLOCKED_KEYS = ['constructor', 'prototype', '__proto__'];
 
     #indexMap = new Map();
     #state = {};
@@ -129,7 +169,7 @@ class JSBinder
     /**
      * Updates the state object and triggers a refresh of all bindings.
      * Can accept either a plain object or a function that receives the current state and returns updates.
-     * State updates are shallow-merged. Setting a property to `undefined` removes it from the state.
+     * State updates are deep-merged. Setting a property to `undefined` removes it from the state.
      * 
      * @param {Object|Function} data - The state updates to apply, or a function that receives current state and returns updates.
      * @returns {void}
@@ -159,14 +199,16 @@ class JSBinder
             return JSBinder.#error(`'setState' requires an object or a function with a single attribute returning an object as input`);
 
         const recurse = (state, updates) => {
-            Object.keys(updates).forEach((key) => { if (updates[key] === undefined) { delete state[key]; } else { state[key] = JSBinder.#isPlainObject(updates[key]) ? recurse(state[key] || {}, updates[key]) : updates[key]; } });
+            Object.keys(updates)
+                .filter(key => !JSBinder.#BLOCKED_KEYS.includes(key))
+                .forEach((key) => { if (updates[key] === undefined) { delete state[key]; } else { state[key] = JSBinder.#isPlainObject(updates[key]) ? recurse(state[key] || {}, updates[key]) : updates[key]; } });
             return state;
         };
 
         this.#state = recurse(this.#state, data);
         this.#stateUpdated = true;
-        this.#needsRefresh = true;
-        this.#queueTasks();
+        this.#refreshPending = true;
+        this.#update.request();
     };
 
     /**
@@ -184,8 +226,8 @@ class JSBinder
      * const state = binder.getState();
      * state.count = 999; // Does not change the actual state
      */
-    getState = () => window.structuredClone(this.#state);
-    
+    getState = () => JSBinder.#structuredClonePolyfill(this.#state);
+
     /**
      * Registers a custom function that can be used in data binding expressions.
      * Functions are called with a single argument and prefixed with `#` in expressions.
@@ -204,8 +246,10 @@ class JSBinder
      * // If value = 5.7, displays: <span>6</span>
      */
     addFunction = (name, method) => {
-        if (!name.match(/^[a-zA-Z]{1}[0-9a-zA-Z_]*$/))
-            return JSBinder.#error(`'addFunction' parameter 'name' must be a correct variable name`);
+        const RGX_FUNCTION = /^[a-zA-Z]{1}[0-9a-zA-Z_]*$/;
+
+        if (!name.match(RGX_FUNCTION))
+            return JSBinder.#error(`'addFunction' parameter 'name' must match the pattern '${RGX_FUNCTION}'`);
 
         if (typeof method !== "function" || method.length !== 1)
             return JSBinder.#error(`'addFunction' 'method' must be a function with a single argument`);
@@ -216,14 +260,13 @@ class JSBinder
     // Creates a path from expression. "data[0].title" >> ["data", 0, "title"]
     #createPath = (exp) => {
         const path = exp
-            .replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => this.#indexMap.get(key)) // "{index_key}" >> index.
             .replace(/\[(\d+)\]/g, ".$1.") // array[1] >> array.1.
             .replace(/\.+/g, ".") // ".." >> "."
             .replace(/^\./g, "") // ".aa.bb" >> "aa.bb"
             .replace(/\.$/g, "") // "aa.bb." >> "aa.bb"
             .split(".");
 
-        if (path.some(x => ["__proto__", "constructor", "prototype"].includes(x)))
+        if (path.some(x => JSBinder.#BLOCKED_KEYS.includes(x)))
             throw new Error(JSBinder.#message("Path includes forbidden keywords"));
 
         return path;
@@ -235,6 +278,8 @@ class JSBinder
 
         exp = exp.trim();
 
+        exp = exp.replace(/\$([a-zA-Z0-9_]+)\$/g, (_, key) => this.#indexMap.get(key)) // "{index_key}" >> index.
+
         if (exp.match(/^-?\d+$/)) return parseInt(exp); //int
         if (exp.match(/^-?\d+\.\d+$/)) return parseFloat(exp); //float
         if (exp.match(/^(['"]).*\1$/)) return exp.substr(1,exp.length-2); //string ('text' or "text")
@@ -245,7 +290,7 @@ class JSBinder
         if (exp === "Infinity") return Infinity;
         if (exp === "NaN") return NaN;
 
-        JSBinder.#getInnerExpressions(exp).forEach(x => JSBinder.#apply(this.#evaluate(x))((evaluated) => exp = exp.replace(`[${x}]`, `.${evaluated}.`)));
+        [...JSBinder.#getInnerExpressions(exp)].forEach(x => JSBinder.#apply(this.#evaluate(x))((evaluated) => exp = exp.replace(`[${x}]`, `.${evaluated}.`)));
 
         return this.#createPath(exp).reduce((x, key) => (x === undefined || x[key] === undefined) ? undefined : x[key], this.#state);
     };
@@ -259,21 +304,21 @@ class JSBinder
         if (target) {
             target[key] = value;
             this.#stateUpdated = true;
-            this.#needsRefresh = true;
-            this.#queueTasks();
+            this.#refreshPending = true;
+            this.#update.request();
         }
     };
 
      // Expression solver - Parses and evaluates JavaScript-like expressions in bindings.
      // Handles operators, functions, ternary expressions, and respects operator precedence.
-    static #Solver = class {
+    static #Solver = class Solver {
         static #OPERATORS = new Set(["?", ":", "(", ")", "!!", "!", "~", "<<", ">>", ">>>", "**", "*", "/", "%", "+", "-", ">=", ">", "<=", "<", "===", "==", "!==", "!=", "&", "^", "|", "&&", "||", "??"]);
 
         static #isFunction = (x) => typeof x === "string" && !!x.match(/^#[a-zA-Z]{1}[0-9a-zA-Z_]*$/);
-        static #isOperator = (x) => typeof x === "string" && JSBinder.#Solver.#OPERATORS.has(x);
+        static #isOperator = (x) => typeof x === "string" && Solver.#OPERATORS.has(x);
 
         // Tokenizer - Handles string parsing and token extraction.
-        static #Tokenizer = class {
+        static #Tokenizer = class Tokenizer {
             #stringMap = new Map();
             #expressionMap = new Map();
 
@@ -290,34 +335,31 @@ class JSBinder
             // Extract inner expressions and temporary replace with placeholder.
             // "[...]" >> "[{{exp#index#}}]"
             extractExpressions = (exp) => {
-                JSBinder.#getInnerExpressions(exp).forEach((match, index) => {
-                    this.#expressionMap.set(index, match);
-                    exp = exp.replace(`[${match}]`, `[{{exp${index}}}]`);
-                });
-                return exp;
+                [...JSBinder.#getInnerExpressions(exp)]
+                    .forEach((match, index) => {
+                        this.#expressionMap.set(index, match);
+                        exp = exp.replace(`[${match}]`, `[{{exp${index}}}]`);
+                    });
+                    return exp;
             };
 
             // Restore inner expressions.
             // "[{{exp#index#}}]" >> "[...]"
-            restoreExpressions = (parts) => {
-                parts = parts.map((x) => x.replace(/\{\{exp(\d+)\}\}/g, (_, index) => this.#expressionMap.get(parseInt(index))));
-                return parts;
-            };
+            restoreExpressions = (parts) => 
+                parts.map((x) => x.replace(/\{\{exp(\d+)\}\}/g, (_, index) => this.#expressionMap.get(parseInt(index))));
 
             // Restore strings.
             // "{{str#index#}}" >> "..." & '...'
-            restoreStrings = (parts) => {
-                parts = parts.map((x) => {
+            restoreStrings = (parts) => 
+                parts.map((x) => {
                     const m = x.match(/^\{\{str(\d+)\}\}$/);
                     if (m) return this.#stringMap.get(parseInt(m[1])); // lägg till " ?? 'undefined_temp_value'" etc..?
                     return x;
                 });
-                return parts;
-            };
         };
 
         // TreeBuilder - Constructs the AST from tokens.
-        static #TreeBuilder = class {
+        static #TreeBuilder = class TreeBuilder {
             #parts;
             #pos = 0;
 
@@ -329,58 +371,74 @@ class JSBinder
             build = () => this.#parseExpression();
 
             #parseExpression = () => {
-                let output = [];
+                const nodes = [];
 
                 // ["(", "1", "+", "1", ")", "/", "2"] >> [["1", "+", "1"], "/", "2"]
-                while (this.#pos < this.#parts.length) {
-                    if (this.#parts[this.#pos] === "(") { this.#pos++; output.push(JSBinder.#unwrapSingleArray(this.#parseExpression())); }
-                    else if (this.#parts[this.#pos] === ")") { this.#pos++; break; }
-                    else { output.push(this.#parts[this.#pos]); this.#pos++ }
-                }
+                outerGrouping: while (this.#pos < this.#parts.length)
+                    innerGrouping: switch (this.#parts[this.#pos])
+                    {
+                        case "(":
+                            this.#pos++;
+                            nodes.push(JSBinder.#unwrapSingleArray(this.#parseExpression()));
+                            break innerGrouping;
+                        case ")":
+                            this.#pos++;
+                            break outerGrouping;
+                        default:
+                            nodes.push(this.#parts[this.#pos]);
+                            this.#pos++;
+                            break innerGrouping;
+                    };
+
+                // (right to left) ..., function, argument, ... >> ..., [function, argument], ...
+                for (let x = nodes.length - 2; x >= 0; x--)
+                    if (Solver.#isFunction(nodes[x]))
+                        nodes.splice(x, 2, [nodes[x], nodes[x+1]]);
 
                 // (right to left) (..., operator) "-", "5", ... >> (..., operator) ["-", "5"], ...
-                for (let x = output.length - 2; x >= 0; x--)
-                    if (["-", "+"].includes(output[x]) && (x === 0 || JSBinder.#Solver.#isOperator(output[x-1])))
-                        output.splice(x, 2, [output[x], output[x+1]]);
+                for (let x = nodes.length - 2; x >= 0; x--)
+                    if (["-", "+"].includes(nodes[x]) && (x === 0 || Solver.#isOperator(nodes[x-1])))
+                        nodes.splice(x, 2, [nodes[x], nodes[x+1]]);
 
                 // (right to left) ..., prefix_operator, operand, ... >> ..., [prefix_operator, operand], ...
                 // ["false", "===", "!", "true"] >> ["false", "===", ["!", "true"]]
                 // ["false", "===", "!", "!", "true"] >> ["false", "===", ["!", ["!", "true"]]]
-                for (let x = output.length - 2; x >= 0; x--)
-                    if (["!!", "!", "~"].includes(output[x]))
-                        output.splice(x, 2, [output[x], output[x+1]]);
+                for (let x = nodes.length - 2; x >= 0; x--)
+                    if (["!!", "!", "~"].includes(nodes[x]))
+                        nodes.splice(x, 2, [nodes[x], nodes[x+1]]);
         
                 // (right to left) ..., operand, infix_operator, operand, ... >> ..., [operand, infix_operator, operand], ...
-                for (let x = output.length - 3; x >= 0; x--)
-                    if (["**"].includes(output[x+1]))
-                        output.splice(x, 3, [output[x], output[x+1], output[x+2]]);
+                for (let x = nodes.length - 3; x >= 0; x--)
+                    if (["**"].includes(nodes[x+1]))
+                        nodes.splice(x, 3, [nodes[x], nodes[x+1], nodes[x+2]]);
 
                 // (left to right) ..., operand, infix_operator, operand, ... >> ..., [operand, infix_operator, operand], ...
                 // ["4", "/", "2", "+", "2", "*", "4", "==", "10"] >> [[["4", "/", "2"], "+", ["2", "*", "4"]], "==", "10"]
                 [["*", "/", "%"], ["+", "-"], ["<<", ">>", ">>>"], [">=", ">", "<=", "<"], ["===", "==", "!==", "!="], ["&"], ["^"], ["|"], ["&&"], ["||"], ["??"]].forEach((ops) => {
                     let x = 0;
-                    while (output.length > 3 && x <= output.length - 3)
-                        if (ops.includes(output[x+1])) { output.splice(x, 3, [output[x], output[x+1], output[x+2]]); } else { x++ };
+                    while (nodes.length > 3 && x <= nodes.length - 3)
+                        if (ops.includes(nodes[x+1])) { nodes.splice(x, 3, [nodes[x], nodes[x+1], nodes[x+2]]); } else { x++ };
                 });
 
                 // (right to left) ..., [1, "==", 2], "?", "'Yes'", ":", "'No'", ... >> ..., [[1, "==", 2], "?", "'Yes'", ":", "'No'"], ...
-                for (let x = output.length - 5; x >= 0; x--)
-                    if (output[x+1] === "?" && output[x+3] === ":")
-                        output.splice(x, 5, [output[x], "?", output[x+2], ":", output[x+4]]);
+                for (let x = nodes.length - 5; x >= 0; x--)
+                    if (nodes[x+1] === "?" && nodes[x+3] === ":")
+                        nodes.splice(x, 5, [nodes[x], "?", nodes[x+2], ":", nodes[x+4]]);
 
                 // Make sure to not return nested lists if not needed.
                 // [[...]] >> [...]
-                return output.length === 1 && Array.isArray(output[0]) ? output[0] : output;
+                return nodes.length === 1 && Array.isArray(nodes[0]) ? nodes[0] : nodes;
             };
         };
 
         // TreeEvaluator - Evaluates the constructed AST.
-        static #Evaluator = class {
-            #binder;
+        static #Evaluator = class Evaluator {
+            #binderReference;
 
-            constructor(binder)
+            constructor(binderInstance)
             {
-                this.#binder = binder;
+                // Use WeakRef to avoid creating strong reference cycles between the evaluator and binder, allowing for proper garbage collection when the binder is no longer needed.
+                this.#binderReference = new WeakRef(binderInstance);
             }
 
             evaluate = (tree) => this.#evaluate(tree);
@@ -399,8 +457,7 @@ class JSBinder
                 return data;
             };
 
-            static #prefixOperations =
-            [
+            static #prefixOperations = [
                 ["!!", (x) => !!x],
                 ["!",  (x) =>  !x],
                 ["~",  (x) =>  ~x],
@@ -408,8 +465,7 @@ class JSBinder
                 ["+",  (x) => 0+x],
             ];
 
-            static #infixOperations =
-            [
+            static #infixOperations = [
                 ["**",  (x, y) => x **  y], 
                 ["*",   (x, y) => x *   y], 
                 ["/",   (x, y) => x /   y], 
@@ -436,6 +492,8 @@ class JSBinder
             ];
 
             #evaluate = (tree) => {
+                const binder = this.#binderReference.deref();
+
                 // [[1, "==", 2], "?", "'yes'", ":", "'no'" ] >> ["'no'"]
                 const handleTernary = (data) => {
                     const list = (x) => Array.isArray(x) ? x : [x];
@@ -446,21 +504,22 @@ class JSBinder
 
                 // [#round, 5.5] >> [6]
                 const handleFunctions = (data) =>
-                    JSBinder.#Solver.#Evaluator.#evaluatePrefixOperations(data, Object.entries(this.#binder.#functions)); //Object.entries(...) >> [["#round", (x) => Math.round(x)], ...]
+                    Evaluator.#evaluatePrefixOperations(data, Object.entries(binder.#functions)); //Object.entries(...) >> [["#round", (x) => Math.round(x)], ...]
 
                 // ["!", true] >> [false]
                 const handlePrefixOperations = (data) => 
-                    JSBinder.#Solver.#Evaluator.#evaluatePrefixOperations(data, JSBinder.#Solver.#Evaluator.#prefixOperations);
+                    Evaluator.#evaluatePrefixOperations(data, Evaluator.#prefixOperations);
 
                 // [1, "+", 2] >> [3]
                 const handleInfixOperations = (data) =>
-                    JSBinder.#Solver.#Evaluator.#evaluateInfixOperations(data, JSBinder.#Solver.#Evaluator.#infixOperations);
+                    Evaluator.#evaluateInfixOperations(data, Evaluator.#infixOperations);
 
                 // Recursive parse tree nodes to values.
                 // ["'string'", "vaiable_eq_1", "true", ...] >> ["string", 1, true, ...]
-                const resolveLiterals = (input) => input
-                    .map((x) => Array.isArray(x) ? resolveLiterals(x) : x)
-                    .map((x) => !Array.isArray(x) && !JSBinder.#Solver.#isFunction(x) && !JSBinder.#Solver.#isOperator(x) ? this.#binder.#resolveValue(x) : x);
+                const resolveLiterals = (input) => 
+                    input
+                        .map((x) => Array.isArray(x) ? resolveLiterals(x) : x)
+                        .map((x) => !Array.isArray(x) && !Solver.#isFunction(x) && !Solver.#isOperator(x) ? binder.#resolveValue(x) : x);
 
                 // Recursive solve tree.
                 const evaluateTree = (input) => JSBinder.#pipe(handleTernary, handleFunctions, handlePrefixOperations, handleInfixOperations, JSBinder.#unwrapSingleArray)(input.map((x) => Array.isArray(x) ? evaluateTree(x) : x));
@@ -470,33 +529,35 @@ class JSBinder
         };
 
         // Main ExpressionTree class - Coordinates the parsing and evaluation.
-        static ExpressionTree = class {
+        static ExpressionTree = class ExpressionTree {
             #tree;
             #evaluator;
 
+            static #RGX_TOKENS = /(>>>|===|!==|!!|<<|>>|\*\*|>=|<=|==|!=|&&|\|\||\?\?|\?|:|\(|\)|!|~|\*|\/|%|\+|-|>|<|&|\^|\|)/g
+
             constructor (binder, exp)
             {
-                this.#tree = this.#buildTree(exp);
-                this.#evaluator = new JSBinder.#Solver.#Evaluator(binder);
+                this.#tree = ExpressionTree.#buildTree(exp);
+                this.#evaluator = new Solver.#Evaluator(binder);
             };
 
-            #buildTree = (exp) => {
-                const tokenizer = new JSBinder.#Solver.#Tokenizer();
+            static #buildTree = (exp) => {
+                const tokenizer = new Solver.#Tokenizer();
 
                 exp = tokenizer.extractStrings(exp);
                 exp = tokenizer.extractExpressions(exp);
-
+                
                 // Split expression
                 // "5+3-x" >> "5 + 3 - x" >> ["5", "+", "3", "-", "x"]
                 let parts = exp
-                    .replace(/(>>>|===|!==|!!|<<|>>|\*\*|>=|<=|==|!=|&&|\|\||\?\?|\?|:|\(|\)|!|~|\*|\/|%|\+|-|>|<|&|\^|\|)/g, " $1 ")
+                    .replace(ExpressionTree.#RGX_TOKENS, " $1 ")
                     .trim()
                     .split(/\s+/);
 
                 parts = tokenizer.restoreExpressions(parts);
                 parts = tokenizer.restoreStrings(parts);
 
-                return new JSBinder.#Solver.#TreeBuilder(parts).build();
+                return (new Solver.#TreeBuilder(parts)).build();
             };
 
             // Recursive evaluation of expression tree.
@@ -504,10 +565,18 @@ class JSBinder
         };
     };
 
+    // Shorthand to evaluate an expression directly without manually creating an ExpressionTree instance.
     #evaluate = (expression) => (new JSBinder.#Solver.ExpressionTree(this, expression)).evaluate();
+    
 
-
-    static #TYPE = { CHECKBOX: "checkbox", INPUT: "input", SELECT: "select", IMG: "img", IFRAME: "iframe", TEXTAREA: "textarea" };
+    static #TYPE = {
+        CHECKBOX: "checkbox",
+        INPUT: "input",
+        SELECT: "select",
+        IMG: "img",
+        IFRAME: "iframe",
+        TEXTAREA: "textarea",
+    };
 
     static #typeOf = (obj) => {
         if (obj.matches("input[type='checkbox']")) return JSBinder.#TYPE.CHECKBOX;
@@ -523,9 +592,9 @@ class JSBinder
 
     // Helper function to find directives in the DOM not inside a template or other directive.
     #queryDirectives = (selector) => (callback) => {
-        [...this.#settings.root.querySelectorAll(selector)]
+        [...this.#root.querySelectorAll(selector)]
             .filter((obj) => !["[data-if]", "[data-each]", "[data-for]", "template"].some(x => !!obj.parentNode.closest(x)))
-            .filter((obj) => obj.closest("[data-jsbinder]") === this.#settings.root)
+            .filter((obj) => obj.closest("[data-jsbinder]") === this.#root)
             .forEach((obj) => callback(obj));
     };
 
@@ -537,13 +606,31 @@ class JSBinder
             .forEach((obj) => callback(obj));
     };
 
+    static #EVENT = {
+        IF: "if",
+        EACH: "each",
+        FOR: "for",
+        BIND: "bind",
+        ATTR: "attr",
+        CLASS: "class",
+        STYLE: "style",
+        RENDER: "render",
+        STATECHANGED: "statechanged",
+    };
+
+    static #ACTION = {
+        ADD: "add",
+        REMOVE: "remove",
+        SET: "set",
+    };
+
     // Helper function to dispatch custom JSBinder events.
-    static #dispatchEvent = (obj, type, detail = {}) => obj.dispatchEvent(new CustomEvent(`jsbinder-${type}`, { 'bubbles': true, 'detail': detail }));
+    static #dispatchEvent = (obj, type, detail = {}) => obj.dispatchEvent(new CustomEvent(`jsbinder-${type}`, { 'bubbles': true, detail }));
 
     // Memoization of last value to check if it has changed.
     // let memo = new JSBinder.#ChangeDetector();
     // memo.check(data) >> boolean (true on first call or if data is different from last check.)
-    static #ChangeDetector = class { #current = null; #first = true; check = (value) => { if (this.#first === true || value !== this.#current) { this.#current = value; this.#first = false; return true; } return false; } };
+    static #ChangeDetector = class ChangeDetector { #current = null; #first = true; check = (value) => { if (this.#first === true || value !== this.#current) { this.#current = value; this.#first = false; return true; } return false; } };
 
     // If
     //
@@ -552,9 +639,10 @@ class JSBinder
     // data.visible = false >> <div data-if="data.visible === true">...</div> >> <!-- if -->
     //
     // event: jsbinder-if with e.detail.action = "add" / "remove".
-    #ifDirective = ((binder) => new class {
+    #ifDirective = ((binder) => new class IfDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
+
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Finds and stores data-if elements, replacing them with comment placeholders.
         register = () => {
@@ -581,13 +669,16 @@ class JSBinder
 
             this.#bindings.forEach((binding) => {
                 const result = !!binding.expressionTree.evaluate();
-                if (binding.modified.check(result)) {
-                    if (result === true) {
+                if (binding.modified.check(result))
+                {
+                    if (result) {
                         binding.obj = JSBinder.#replaceObject(binding.obj)(JSBinder.#deserializeHTML(binding.html));
-                        JSBinder.#dispatchEvent(binding.obj, "if", { action: "add" });
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.IF, { action: JSBinder.#ACTION.ADD });
                         counter++;
-                    } else {
-                        JSBinder.#dispatchEvent(binding.obj, "if", { action: "remove" });
+                    }
+                    
+                    if (!result) {
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.IF, { action: JSBinder.#ACTION.REMOVE }); // Dispatch before removing the element.
                         binding.obj = JSBinder.#replaceObject(binding.obj)(document.createComment("if"));
                     }
                 }
@@ -599,20 +690,23 @@ class JSBinder
 
     // Each
     //
-    // data-each="@item in items" data-key="@item..." [data-where="..."] [data-skip="..."] [data-limit="..."] [data-orderby="..."] [data-distinct="..."]
+    // data-each="@item in items" data-key="@item..." [data-where="..."] [data-skip="..."] [data-limit="..."] [data-page="..." data-pagesize="..."] [data-orderby="..."] [data-distinct="..."]
+    // data-each="@item, @index in items"
     //
-    // { items: ["a", "b", ...] }      >> <p data-each="@item in items" data-key="@item">{{@item}}</p>                                        >> <p>a</p><p>b</p>...
-    // { items: [{title: "a"}, ...] }  >> <p data-each="@item in items" data-key="@item.title">{{@item.title}}</p>                            >> <p>a</p>...
-    // { numbers: [1,2,3,4,5, ...] }   >> <p data-each="@number in numbers" data-key="@number" data-where="@number > 3">{{@number}}</p>       >> <p>4</p><p>5</p>...
-    // { numbers: [1,2,3,4,5, ...] }   >> <p data-each="@number in numbers" data-key="@number" data-skip="1" data-limit="2">{{@number}}</p>   >> <p>2</p><p>3</p>
+    // { items: ["a", "b", ...] }      >> <p data-each="@item in items" data-key="@item">{{@item}}</p>                                          >> <p>a</p><p>b</p>...
+    // { items: [{title: "a"}, ...] }  >> <p data-each="@item in items" data-key="@item.title">{{@item.title}}</p>                              >> <p>a</p>...
+    // { numbers: [1,2,3,4,5, ...] }   >> <p data-each="@number in numbers" data-key="@number" data-where="@number > 3">{{@number}}</p>         >> <p>4</p><p>5</p>...
+    // { numbers: [1,2,3,4,5, ...] }   >> <p data-each="@number in numbers" data-key="@number" data-skip="1" data-limit="2">{{@number}}</p>     >> <p>2</p><p>3</p>
+    // { numbers: [1,2,3,4,5, ...] }   >> <p data-each="@number in numbers" data-key="@number" data-page="2" data-pagesize="5">{{@number}}</p>  >> <p>6</p>...<p>10</p>
     //
     // event: jsbinder-each with e.detail.action = "add" / "remove".
-    #eachDirective = ((binder) => new class {
+    #eachDirective = ((binder) => new class EachDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.start)); };
         #index = 0;
-
-        #RGX_EACH_DIRECTIVE = /^@([a-zA-Z]{1}[0-9a-zA-Z_]*)\s+in\s+([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)$/;
+        
+        static #RGX_EACH_DIRECTIVE = /^@([a-zA-Z]{1}[0-9a-zA-Z_]*)(?:\s*,\s*@([a-zA-Z]{1}[0-9a-zA-Z_]*))?\s+in\s+([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)$/;
+        
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.start.isConnected); };
 
         // Scans for data-each elements, extracts configuration, and stores template HTML with comment markers.
         register = () => {
@@ -620,19 +714,25 @@ class JSBinder
 
             binder.#queryDirectives("[data-each]")
                 ((obj) => {
-                    const [expression, key, where, skip, limit, orderby, distinct] = JSBinder.#consumeDataset(obj)("each", "key", "where", "skip", "limit", "orderby", "distinct");
+                    const [expression, key, where, skip, limit, orderby, distinct, pagesize, page] = JSBinder.#consumeDataset(obj)("each", "key", "where", "skip", "limit", "orderby", "distinct", "pagesize", "page");
                     const html = JSBinder.#cleanHTML(obj.outerHTML);
                     const [start, end] = JSBinder.#replaceObject(obj)(document.createComment("each"), document.createComment("/each"));
 
                     if (key === null)
                         return JSBinder.#error("'each' must have 'key' expression defined");
 
-                    const m = expression.match(this.#RGX_EACH_DIRECTIVE);
+                    if ((pagesize !== null || page !== null) && (skip !== null || limit !== null))
+                        return JSBinder.#error("'page' and 'pagesize' cannot be used in combination with 'skip' or 'limit'");
+
+                    if (pagesize !== null && page === null || page !== null && pagesize === null)
+                        return JSBinder.#error("'page' and 'pagesize' must be used together");
+
+                    const m = expression.match(EachDirective.#RGX_EACH_DIRECTIVE);
 
                     if (!m)
                         return JSBinder.#error(`Incorrect 'each' expression: ${expression}`);
 
-                    const { 1: alias, 2: list } = m;
+                    const { 1: alias, 2: indexAlias, 3: list } = m;
                     this.#bindings.push({
                         itemIndex: this.#index++,
                         html, 
@@ -642,12 +742,15 @@ class JSBinder
                         start, 
                         end, 
                         alias, 
+                        indexAlias,
                         list, 
                         where,
                         orderby,
                         distinct,
                         limitTree: limit !== null ? new JSBinder.#Solver.ExpressionTree(binder, limit) : null,
                         skipTree: skip !== null ? new JSBinder.#Solver.ExpressionTree(binder, skip) : null,
+                        pageTree: page !== null ? new JSBinder.#Solver.ExpressionTree(binder, page) : null,
+                        pagesizeTree: pagesize !== null ? new JSBinder.#Solver.ExpressionTree(binder, pagesize) : null,
                     });
                 });
         };
@@ -657,13 +760,14 @@ class JSBinder
             let counter = 0;
 
             this.#bindings.forEach((binding) => {
-                const whereNotIn = (other) => (x) => !other.includes(x);
-                const whereNotNull = (x) => x !== null;
+                const skip = binding.skipTree?.evaluate() ?? null;
+                const limit = binding.limitTree?.evaluate() ?? null;
 
-                const skip = binding.skipTree !== null ? binding.skipTree.evaluate() : null;
-                const limit = binding.limitTree !== null ? binding.limitTree.evaluate() : null;
+                const page = binding.pageTree?.evaluate() ?? null;
+                const pagesize = binding.pagesizeTree?.evaluate() ?? null;
 
                 const RGX_VARIABLE_ALIAS = JSBinder.#rgxFormatVariable(binding.alias);
+                const RGX_INDEX_ALIAS = !!binding.indexAlias ? JSBinder.#rgxFormatVariable(binding.indexAlias) : null;
 
                 // Create list of all indexes to include, filtered by 'where' if defined.
                 let indexes = JSBinder.#apply(binder.#resolveValue(binding.list))
@@ -674,76 +778,74 @@ class JSBinder
                 // Sort list of indexes if 'orderby' is defined.
                 if (binding.orderby !== null) {
                     indexes = indexes
-                        .map(index => ({ index, value : binder.#evaluate(binding.orderby.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${index}]`)) }))
+                        .map(index => ({ index, value: binder.#evaluate(binding.orderby.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${index}]`)) }))
                         .sort((a, b) => JSBinder.#alphaNumericSorter.sort(a.value, b.value))
                         .map(x => x.index);
                 }
 
                 // Filter on distinct values if 'distinct' is defined.
                 if (binding.distinct !== null) {
-                    const distinctIndexes = Array.from(new Map(indexes.toReversed().map((index) => [binder.#evaluate(binding.distinct.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${index}]`)), index])).values());
-                    indexes = indexes.filter((index) => distinctIndexes.includes(index));
+                    const distinctIndexes = new Set([...new Map(indexes.map((index) => [binder.#evaluate(binding.distinct.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${index}]`)), index]).reverse()).values()]);
+                    indexes = indexes.filter((index) => distinctIndexes.has(index));
                 }
 
                 // Reduce list of indexes if 'skip' or 'limit' is defined.
                 if (skip !== null) indexes = indexes.slice(skip);
                 if (limit !== null) indexes = indexes.slice(0, limit);
 
-                // Calculate keys for each index.
-                const newKeys = indexes.map((index) => 
-                    JSBinder.#apply(binder.#evaluate(binding.key.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${index}]`)).toString().replace(/[^a-zA-Z0-9]/g, "_"))
+                // Reduce list of indexes if 'page' and 'pagesize' are defined.
+                if (page !== null && pagesize !== null) indexes = indexes.slice((page - 1) * pagesize, page * pagesize);
+
+                // Calculate keys for each index and populate `#indexMap` for current source and render indexes.
+                const nextKeys = indexes.map((sourceIndex, renderIndex) => 
+                    JSBinder.#apply(binder.#evaluate(binding.key.replace(RGX_VARIABLE_ALIAS, `${binding.list}[${sourceIndex}]`)).toString().replace(/[^a-zA-Z0-9]/g, "_"))
                         ((key) => {
-                            binder.#indexMap.set(`${binding.itemIndex}_${key}`, index);
+                            binder.#indexMap.set(`${binding.itemIndex}_${key}__sourceindex`, sourceIndex);
+                            binder.#indexMap.set(`${binding.itemIndex}_${key}__renderindex`, renderIndex);
                             return `${binding.itemIndex}_${key}`;
                         }));
 
-                // Compare keys to know what to add or remove.
-                const keysToRemove = binding.keys.filter(whereNotIn(newKeys));
-                const keysToAdd = newKeys.filter(whereNotIn(binding.keys));
+                const { outgoing, incoming } = JSBinder.#diff(binding.keys, nextKeys);
 
                 // Remove existing items.
                 binding.keys.forEach((key, i) => {
-                    if (keysToRemove.includes(key)) {
-                        JSBinder.#dispatchEvent(binding.objs[i], "each", { action: "remove" });
+                    if (outgoing.has(key)) {
+                        JSBinder.#dispatchEvent(binding.objs[i], JSBinder.#EVENT.EACH, { action: JSBinder.#ACTION.REMOVE }); // Dispatch before removing the element.
                         binding.objs[i].remove();
                         binding.objs[i] = null;
-                        binding.keys[i] = null;
                     }
                 });
 
-                // Filtered lists to not include removed elements.
-                let existingKeys = binding.keys.filter(whereNotNull);
-                let existingObjs = binding.objs.filter(whereNotNull);
+                const existingObjMap = new Map(binding.keys.map((key, i) => [key, binding.objs[i]]));
 
                 let lastObj = binding.start; //Store reference to element to add new items after.
-                let newObjs = [];
+                const nextObjs = [];
 
-                newKeys.forEach((key) => {
+                nextKeys.forEach((key) => {
                     let obj = null;
 
-                    if (keysToAdd.includes(key)) {
+                    if (incoming.has(key)) {
                         // Add new item.
-                        obj = JSBinder.#deserializeHTML(binding.html.replace(RGX_VARIABLE_ALIAS, `${binding.list}[{${key}}]`));
+                        let html = binding.html;
+                        html = html.replace(RGX_VARIABLE_ALIAS, `${binding.list}[$${key}__sourceindex$]`);
+                        if (RGX_INDEX_ALIAS) html = html.replace(RGX_INDEX_ALIAS, `$${key}__renderindex$`);
+
+                        obj = JSBinder.#deserializeHTML(html);
                         lastObj.after(obj);
-                        JSBinder.#dispatchEvent(obj, "each", { action: "add" });
+                        JSBinder.#dispatchEvent(obj, JSBinder.#EVENT.EACH, { action: JSBinder.#ACTION.ADD });
                         counter++;
                     } else {
                         // Reorder existing items if needed.
-                        const index = existingKeys.indexOf(key);
-                        obj = existingObjs[index];
-
-                        if (index > 0) lastObj.after(obj); // If object is not next of existing it needs to be moved to after "lastObj".
-
-                        existingObjs.splice(index, 1); // Removes object from list of old objects (unhandled objects).
-                        existingKeys.splice(index, 1);
+                        obj = existingObjMap.get(key);
+                        if (lastObj.nextElementSibling !== obj) lastObj.after(obj); // If object is not next of existing it needs to be moved to after "lastObj".
                     }
 
                     lastObj = obj;
-                    newObjs.push(obj);
+                    nextObjs.push(obj);
                 });
 
-                binding.objs = newObjs;
-                binding.keys = newKeys;
+                binding.objs = nextObjs;
+                binding.keys = nextKeys;
             });
 
             return counter;
@@ -759,11 +861,12 @@ class JSBinder
     // <p data-for="@number" data-from="1" data-to="7" data-where="@number % 2 === 0">{{@number}}</p>   >> <p>2</p><p>4</p><p>6</p>
     //
     // event: jsbinder-for with e.detail.action = "add" / "remove".
-    #forDirective = ((binder) => new class {
+    #forDirective = ((binder) => new class ForDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.start)); };
+        
+        static #RGX_FOR_DIRECTIVE = /^@([a-zA-Z]{1}[0-9a-zA-Z_]*)$/;
 
-        #RGX_FOR_DIRECTIVE = /^@([a-zA-Z]{1}[0-9a-zA-Z_]*)$/;
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.start.isConnected); };
 
         // Finds data-for elements with range specifications and stores template HTML with comment markers.
         register = () => {
@@ -778,7 +881,7 @@ class JSBinder
                     if (from === null || to === null)
                         return JSBinder.#error("'for' must have 'from' and 'to' expressions defined");
 
-                    const m = expression.match(this.#RGX_FOR_DIRECTIVE);
+                    const m = expression.match(ForDirective.#RGX_FOR_DIRECTIVE);
 
                     if (!m)
                         return JSBinder.#error(`Incorrect 'for' expression: ${expression}`);
@@ -803,59 +906,50 @@ class JSBinder
             let counter = 0;
 
             this.#bindings.forEach((binding) => {
-                const whereNotIn = (other) => (x) => !other.includes(x);
-                const whereNotNull = (x) => x !== null;
-
                 const from = binding.fromTree.evaluate();
                 const to = binding.toTree.evaluate();
 
                 const RGX_VARIABLE_ALIAS = JSBinder.#rgxFormatVariable(binding.alias);
 
                 // Create list of all keys/numbers to include, filtered by 'where' if defined.
-                const newKeys = [...function* () { for (let key = from; key <= to; key++) { if (binding.where === null || binder.#evaluate(binding.where.replace(RGX_VARIABLE_ALIAS, key))) yield(key); } }()];
+                const nextKeys = [...function* () { for (let key = from; key <= to; key++) { if (binding.where === null || binder.#evaluate(binding.where.replace(RGX_VARIABLE_ALIAS, key))) yield(key); } }()];
 
-                // Compare keys to know what to add or remove.
-                const keysToRemove = binding.keys.filter(whereNotIn(newKeys));
-                const keysToAdd = newKeys.filter(whereNotIn(binding.keys));
+                const { outgoing, incoming } = JSBinder.#diff(binding.keys, nextKeys);
 
                 // Remove existing items
                 binding.keys.forEach((key, i) => {
-                    if (keysToRemove.includes(key)) {
-                        JSBinder.#dispatchEvent(binding.objs[i], "for", { action: "remove" });
+                    if (outgoing.has(key)) {
+                        JSBinder.#dispatchEvent(binding.objs[i], JSBinder.#EVENT.FOR, { action: JSBinder.#ACTION.REMOVE }); // Dispatch before removing the element.
                         binding.objs[i].remove();
                         binding.objs[i] = null;
-                        binding.keys[i] = null;
                     }
                 });
 
-                // Filtered lists to not include removed elements
-                let existingKeys = binding.keys.filter(whereNotNull);
-                let existingObjs = binding.objs.filter(whereNotNull);
+                const existingObjMap = new Map(binding.keys.map((key, i) => [key, binding.objs[i]]));
 
                 let lastObj = binding.start; // Store reference to element to add new items after...
-                let newObjs = [];
+                const nextObjs = [];
 
-                newKeys.forEach((key) => {
+                nextKeys.forEach((key) => {
                     let obj = null;
 
-                    if (keysToAdd.includes(key)) {
+                    if (incoming.has(key)) {
                         // Add new item
                         obj = JSBinder.#deserializeHTML(binding.html.replace(RGX_VARIABLE_ALIAS, key));
                         lastObj.after(obj);
-                        JSBinder.#dispatchEvent(obj, "for", { action: "add" });
+                        JSBinder.#dispatchEvent(obj, JSBinder.#EVENT.FOR, { action: JSBinder.#ACTION.ADD });
                         counter++;
                     } else {
                         // Existing items...
-                        const index = existingKeys.indexOf(key);
-                        obj = existingObjs[index];
+                        obj = existingObjMap.get(key);
                     }
                     
                     lastObj = obj;
-                    newObjs.push(obj);
+                    nextObjs.push(obj);
                 });
 
-                binding.objs = newObjs;
-                binding.keys = newKeys;
+                binding.objs = nextObjs;
+                binding.keys = nextKeys;
             });
 
             return counter;
@@ -870,11 +964,19 @@ class JSBinder
     //
     // event: jsbinder-attr with e.detail.key = attribute key and e.detail.value = value.
     //        jsbinder-bind with e.detail.value = value. (e.target = parentNode)
-    #interpolationDirective = ((binder) => new class {
+    #interpolationDirective = ((binder) => new class InterpolationDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
-
-        #RGX_INTERPOLATION_DIRECTIVE = /\{\{(.+)\}\}/g;
+        
+        static #RGX_INTERPOLATION = /\{\{(.+?)\}\}/g;
+        static #RGX_START = /^\{\{/;
+        static #RGX_END = /\}\}$/;
+        
+        static #INTERPOLATION_TYPE = {
+            TEXT: "text",
+            ATTRIBUTE: "attribute",
+        };
+        
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Scans text content and attributes for {{...}} expressions, extracting and storing them.
         register = () => {
@@ -883,22 +985,22 @@ class JSBinder
             let counter = 0;
 
             // "aa {{bb}} cc {{dd}} ee" >> "aa {0} cc {1} ee"
-            const prepareString = (input) => input.replace(this.#RGX_INTERPOLATION_DIRECTIVE, (() => { let index = 0; return () => `{${index++}}`; })());
+            const prepareString = (input) => input.replace(InterpolationDirective.#RGX_INTERPOLATION, (() => { let index = 0; return () => `{${index++}}`; })());
 
             // "{{aa}}" >> "aa"
-            const trimExpression = (x) => x.replace(/^\{\{/, "").replace(/\}\}$/, "").trim();
+            const trimExpression = (x) => x.replace(InterpolationDirective.#RGX_START, "").replace(InterpolationDirective.#RGX_END, "").trim();
 
             const scanNode = (element) => {
 
                 // Find all interolations in innerHTML.
                 // Ex: <h1>{{page.title}}</h1>
                 if (element.nodeType === Node.TEXT_NODE) {
-                    const m = element.textContent.match(this.#RGX_INTERPOLATION_DIRECTIVE);
+                    const m = element.textContent.match(InterpolationDirective.#RGX_INTERPOLATION);
 
                     if (m) {
                         this.#bindings.push({
                             obj: element,
-                            type: "text",
+                            type: InterpolationDirective.#INTERPOLATION_TYPE.TEXT,
                             expressions: [...m].map(trimExpression),
                             text: prepareString(element.textContent.trim()),
                             modified: new JSBinder.#ChangeDetector(),
@@ -913,15 +1015,15 @@ class JSBinder
                 if (element.nodeType === Node.ELEMENT_NODE) {
                     const attributes = element.attributes;
                     for (let i = 0; i < attributes.length; i++) {
-                        const m = attributes[i].value.match(this.#RGX_INTERPOLATION_DIRECTIVE);
+                        const m = attributes[i].value.match(InterpolationDirective.#RGX_INTERPOLATION);
 
                         if (m) {
-                            if ((JSBinder.#typeOf(element) === JSBinder.#TYPE.SELECT || JSBinder.#typeOf(element) === JSBinder.#TYPE.INPUT) && attributes[i].name.toLowerCase() === "value")
+                            if (([JSBinder.#TYPE.SELECT, JSBinder.#TYPE.INPUT, JSBinder.#TYPE.TEXTAREA].includes(JSBinder.#typeOf(element))) && attributes[i].name.toLowerCase() === "value")
                                 JSBinder.#warn("Binding attribute 'value' on form elements can only be done with 'data-bind'.");
 
                             this.#bindings.push({
                                 obj: element,
-                                type: "attribute",
+                                type: InterpolationDirective.#INTERPOLATION_TYPE.ATTRIBUTE,
                                 expressions: [...m].map(trimExpression),
                                 key: attributes[i].name,
                                 text: prepareString(attributes[i].value),
@@ -937,7 +1039,7 @@ class JSBinder
                 if (element.nodeType === Node.DOCUMENT_NODE || element.nodeType === Node.ELEMENT_NODE) binder.#iterateChildNodes(element)(x => scanNode(x));
             };
             
-            scanNode(binder.#settings.root);
+            scanNode(binder.#root);
 
             return counter;
         };
@@ -948,17 +1050,26 @@ class JSBinder
                 const result = binding.expressions.reduce((text, expression, index) => text.replace("{"+index+"}", binder.#evaluate(expression)), binding.text) ?? "";
                 switch (binding.type)
                 {
-                    case "text":
-                        if (binding.modified.check(result)) {
+                    case InterpolationDirective.#INTERPOLATION_TYPE.TEXT:
+                        if (binding.modified.check(result))
+                        {
                             binding.obj.textContent = result;
-                            JSBinder.#dispatchEvent(binding.obj.parentNode, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj.parentNode, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
 
-                    case "attribute":
-                        if (binding.modified.check(result)) {
-                            binding.obj.setAttribute(binding.key, result);
-                            JSBinder.#dispatchEvent(binding.obj, "attr", { key: binding.key, value: result });
+                    case InterpolationDirective.#INTERPOLATION_TYPE.ATTRIBUTE:
+                        if (binding.modified.check(result))
+                        {
+                            if (!JSBinder.#isNullish(result)) {
+                                binding.obj.setAttribute(binding.key, result);
+                                JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.ATTR, { key: binding.key, action: JSBinder.#ACTION.SET, value: result });
+                            }
+
+                            if (JSBinder.#isNullish(result) && binding.obj.hasAttribute(binding.key)) {
+                                binding.obj.removeAttribute(binding.key);
+                                JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.ATTR, { key: binding.key, action: JSBinder.#ACTION.REMOVE });
+                            }
                         }
                         break;
                 }
@@ -975,11 +1086,12 @@ class JSBinder
     // <input/select data-bind="..." /> >> <input/select value="..." />
     //
     // event: jsbinder-bind with e.detail.value = value.
-    #bindDirective = ((binder) => new class {
+    #bindDirective = ((binder) => new class BindDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
-
-        #getDomDepth = (node) => Array.from(function* (n) { while (n.parentElement) yield (n = n.parentElement); }(node)).length;
+        
+        static #getDomDepth = (node) => [...function* (n) { while (n.parentElement) yield (n = n.parentElement); }(node)].length;
+        
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Finds data-bind elements and stores their expressions with DOM depth for proper evaluation order.
         register = () => {
@@ -993,7 +1105,7 @@ class JSBinder
                         obj, 
                         expressionTree: new JSBinder.#Solver.ExpressionTree(binder, expression),
                         modified: new JSBinder.#ChangeDetector(), 
-                        depth: this.#getDomDepth(obj),
+                        depth: BindDirective.#getDomDepth(obj),
                     });
                 });
         };
@@ -1005,44 +1117,58 @@ class JSBinder
                 switch (JSBinder.#typeOf(binding.obj))
                 {
                     case JSBinder.#TYPE.CHECKBOX:
-                        if (binding.modified.check(result)) {
+                        if (binding.modified.check(result))
+                        {
                             binding.obj.toggleAttribute("checked", !!result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
 
                     case JSBinder.#TYPE.SELECT:
-                        if (binding.modified.check(result) || binding.obj.value !== (JSBinder.#isNullish(result) ? "" : String(result))) {
+                        if (binding.modified.check(result) || binding.obj.value !== (JSBinder.#isNullish(result) ? "" : String(result)))
+                        {
                             binding.obj.value = JSBinder.#isNullish(result) ? "" : String(result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
                         
                     case JSBinder.#TYPE.INPUT:
-                        if (binding.modified.check(result)) {
+                        if (binding.modified.check(result))
+                        {
                             binding.obj.value = JSBinder.#isNullish(result) ? "" : String(result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
+                        }
+                        break;
+
+                    case JSBinder.#TYPE.TEXTAREA:
+                        if (binding.modified.check(result))
+                        {
+                            binding.obj.value = JSBinder.#isNullish(result) ? "" : String(result);
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
 
                     case JSBinder.#TYPE.IMG:
-                        if (binding.modified.check(result)) {
+                        if (binding.modified.check(result))
+                        {
                             binding.obj.setAttribute("src", JSBinder.#isNullish(result) ? null : result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
 
                     case JSBinder.#TYPE.IFRAME:
-                        if (binding.modified.check(result)) {
+                        if (binding.modified.check(result))
+                        {
                             binding.obj.contentWindow.location.replace(JSBinder.#isNullish(result) ? null : result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
 
                     default:
-                        if (binding.modified.check(result)) {
-                            binding.obj.innerHTML = JSBinder.#isNullish(result) ? "" : String(result);
-                            JSBinder.#dispatchEvent(binding.obj, "bind", { value: result });
+                        if (binding.modified.check(result))
+                        {
+                            binding.obj.textContent = JSBinder.#isNullish(result) ? "" : String(result);
+                            JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.BIND, { value: result });
                         }
                         break;
                 }
@@ -1054,14 +1180,17 @@ class JSBinder
     //
     // data-attr="'title' : data.title"
     // data-attr="'title' : data.title; 'src' : data.url"
+    //
     // data-disabled="valid !== true"
+    // data-hidden="authenticated === false"
     //
     // event: jsbinder-attr with e.detail.key = attribute key and e.detail.value = value.
-    #attributeDirective = ((binder) => new class {
+    #attributeDirective = ((binder) => new class AttributeDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
-
-        #RGX_ATTRIBUTE_DIRECTIVE = /^(['"])([a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        
+        static #RGX_ATTRIBUTE_DIRECTIVE = /^(['"])([a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Scans for data-attr directives, parsing attribute:expression mappings.
         register = () => {
@@ -1070,7 +1199,7 @@ class JSBinder
             binder.#queryDirectives("[data-attr]")
                 ((obj) => {
                     JSBinder.#split(JSBinder.#consumeDataset(obj)("attr")).forEach((mapping) => {
-                        const m = mapping.match(this.#RGX_ATTRIBUTE_DIRECTIVE);
+                        const m = mapping.match(AttributeDirective.#RGX_ATTRIBUTE_DIRECTIVE);
 
                         if (!m)
                             return JSBinder.#error(`Incorrect 'attribute' syntax: ${mapping}`);
@@ -1089,27 +1218,38 @@ class JSBinder
                     });
                 });
 
-            // Custom [data-disabled] implementation of [data-attr], to enable/disable form elements.
-            binder.#queryDirectives("[data-disabled]")
-                ((obj) => {
-                    const expression = JSBinder.#consumeDataset(obj)("disabled");
-
-                    this.#bindings.push({
-                        obj,
-                        key: "disabled",
-                        expressionTree: new JSBinder.#Solver.ExpressionTree(binder, "(" + expression + ") ? 'disabled' : null"),
-                        modified: new JSBinder.#ChangeDetector(),
-                    });
-                });
+            // Custom implementation of binary HTML attributes.
+            // [data-disabled] enable/disable form elements using "disabled" attribute.
+            // [data-hidden] show/hide form elements using "hidden" attribute.
+            ["disabled", "hidden"]
+                .forEach((key) =>
+                    binder.#queryDirectives(`[data-${key}]`)
+                        ((obj) => {
+                            const expression = JSBinder.#consumeDataset(obj)(key);
+                            this.#bindings.push({
+                                obj,
+                                key,
+                                expressionTree: new JSBinder.#Solver.ExpressionTree(binder, "(" + expression + ") ? true : null"),
+                                modified: new JSBinder.#ChangeDetector(),
+                            });
+                        }));
         };
 
         // Evaluates expressions and sets/removes attributes based on results.
         refresh = () => {
             this.#bindings.forEach((binding) => {
                 const result = binding.expressionTree.evaluate();
-                if (binding.modified.check(result)) {
-                    if (JSBinder.#isNullish(result)) { binding.obj.removeAttribute(binding.key); } else { binding.obj.setAttribute(binding.key, result); };
-                    JSBinder.#dispatchEvent(binding.obj, "attr", { key: binding.key, value: result });
+                if (binding.modified.check(result))
+                {
+                    if (!JSBinder.#isNullish(result)) {
+                        binding.obj.setAttribute(binding.key, result);
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.ATTR, { key: binding.key, action: JSBinder.#ACTION.SET, value: result });
+                    };
+
+                    if (JSBinder.#isNullish(result) && binding.obj.hasAttribute(binding.key)) {
+                        binding.obj.removeAttribute(binding.key);
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.ATTR, { key: binding.key, action: JSBinder.#ACTION.REMOVE });
+                    } 
                 }
             });
         };
@@ -1122,11 +1262,12 @@ class JSBinder
     // data-class="'disabled" : data.enabled !== true || data.expired === true"
     //
     // event: jsbinder-class with e.detail.key = class name.
-    #classDirective = ((binder) => new class {
+    #classDirective = ((binder) => new class ClassDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
-
-        #RGX_CLASS_DIRECTIVE = /^(['"])([a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        
+        static #RGX_CLASS_DIRECTIVE = /^(['"])([a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Finds data-class directives and parses class:expression mappings.
         register = () => {
@@ -1135,7 +1276,7 @@ class JSBinder
             binder.#queryDirectives("[data-class]")
                 ((obj) => {
                     JSBinder.#split(JSBinder.#consumeDataset(obj)("class")).forEach((mapping) => {
-                        const m = mapping.match(this.#RGX_CLASS_DIRECTIVE);
+                        const m = mapping.match(ClassDirective.#RGX_CLASS_DIRECTIVE);
 
                         if (!m)
                             return JSBinder.#error(`Incorrect 'class' syntax: ${mapping}`);
@@ -1154,10 +1295,18 @@ class JSBinder
         // Evaluates expressions and toggles CSS classes based on boolean results.
         refresh = () => {
             this.#bindings.forEach((binding) => {
-                const result = binding.expressionTree.evaluate();
-                if (binding.modified.check(result)) {
-                    binding.obj.classList.toggle(binding.key, result);
-                    JSBinder.#dispatchEvent(binding.obj, "class", { key: binding.key, action: result ? "add" : "remove" });
+                const result = !!binding.expressionTree.evaluate();
+                if (binding.modified.check(result))
+                {
+                    if (result && !binding.obj.classList.contains(binding.key)) {
+                        binding.obj.classList.add(binding.key);
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.CLASS, { key: binding.key, action: JSBinder.#ACTION.ADD });
+                    }
+
+                    if (!result && binding.obj.classList.contains(binding.key)) {
+                        binding.obj.classList.remove(binding.key);
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.CLASS, { key: binding.key, action: JSBinder.#ACTION.REMOVE });
+                    }
                 }
             });
         };
@@ -1169,13 +1318,14 @@ class JSBinder
     // data-style="'left' : data.x; 'top" : data.y"
     //
     // event: jsbinder-style with e.detail.key = css property.
-    #styleDirective = ((binder) => new class {
+    #styleDirective = ((binder) => new class StyleDirective {
         #bindings = [];
-        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => document.body.contains(x.obj)); };
+        
+        static #RGX_STYLE_DIRECTIVE = /^(['"])((?:--)?[a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        
+        static #toKebabCase = (text) => text.trim().replace(/([a-z])([A-Z])/g, (_, a, b) => `${a}-${b.toLowerCase()}`); // "marginTop" >> "margin-top"
 
-        #toKebabCase = (text) => text.trim().replace(/([a-z])([A-Z])/g, (_, a, b) => `${a}-${b.toLowerCase()}`); // "marginTop" >> "margin-top"
-
-        #RGX_STYLE_DIRECTIVE = /^(['"])((?:--)?[a-zA-Z]{1}[0-9a-zA-Z_-]*)\1\s+:\s+(.+)$/;
+        #pruneDetached = () => { this.#bindings = this.#bindings.filter((x) => x.obj.isConnected); };
 
         // Scans for data-style directives, parsing CSS property:expression mappings.
         register = () => {
@@ -1184,7 +1334,7 @@ class JSBinder
             binder.#queryDirectives("[data-style]")
                 ((obj) => {
                     JSBinder.#split(JSBinder.#consumeDataset(obj)("style")).forEach((mapping) => {
-                        const m = mapping.match(this.#RGX_STYLE_DIRECTIVE);
+                        const m = mapping.match(StyleDirective.#RGX_STYLE_DIRECTIVE);
 
                         if (!m)
                             return JSBinder.#error(`Incorrect 'style' syntax: ${mapping}`);
@@ -1192,7 +1342,7 @@ class JSBinder
                         const { 2: key, 3: expression } = m;
                         this.#bindings.push({
                             obj, 
-                            key: this.#toKebabCase(key),
+                            key: StyleDirective.#toKebabCase(key),
                             expressionTree: new JSBinder.#Solver.ExpressionTree(binder, expression), 
                             modified: new JSBinder.#ChangeDetector(),
                         });
@@ -1204,9 +1354,17 @@ class JSBinder
         refresh = () => {
             this.#bindings.forEach((binding) => {
                 const result = binding.expressionTree.evaluate();
-                if (binding.modified.check(result)) {
-                    if (JSBinder.#isNullish(result)) { binding.obj.style.removeProperty(binding.key); } else { binding.obj.style.setProperty(binding.key, result); };
-                    JSBinder.#dispatchEvent(binding.obj, "style", { key: binding.key, value: result });
+                if (binding.modified.check(result))
+                {
+                    if (!JSBinder.#isNullish(result)) { 
+                        binding.obj.style.setProperty(binding.key, result); 
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.STYLE, { key: binding.key, action: JSBinder.#ACTION.SET, value: result });
+                    }
+                    
+                    if (JSBinder.#isNullish(result) && binding.obj.style.getPropertyValue(binding.key) !== "") {
+                        binding.obj.style.removeProperty(binding.key);
+                        JSBinder.#dispatchEvent(binding.obj, JSBinder.#EVENT.STYLE, { key: binding.key, action: JSBinder.#ACTION.REMOVE });
+                    };
                 }
             });
         };
@@ -1218,29 +1376,30 @@ class JSBinder
     //
     // <button data-onclick="page = 0">First page</button>
     // data-onclick="path1 = expression1; path2 = expression2"
-    #onClickDirective = ((binder) => new class {
+    #onClickDirective = ((binder) => new class OnClickDirective {
 
-        #RGX_ONCLICK_DIRECTIVE = /^([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)\s+=\s+(.+)$/;
+        static #RGX_ONCLICK_DIRECTIVE = /^([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)\s+=\s+(.+)$/;
 
         // Attaches click event listeners that mutate state based on target:expression mappings.
         register = () => {
             binder.#queryDirectives("[data-onclick]")
                 ((obj) => {
-                    JSBinder.#split(JSBinder.#consumeDataset(obj)("onclick")).forEach((mapping) => {
-                        const m = mapping.match(this.#RGX_ONCLICK_DIRECTIVE);
+                    const mappings = [];
 
+                    JSBinder.#split(JSBinder.#consumeDataset(obj)("onclick")).forEach((mapping) => {
+                        const m = mapping.match(OnClickDirective.#RGX_ONCLICK_DIRECTIVE);
                         if (!m)
                             return JSBinder.#error(`Incorrect 'onclick' syntax: ${mapping}`);
 
                         const { 1: target, 2: expression} = m;
-
-                        const applyChange = () => {
-                            const evaluated = binder.#evaluate(expression);
-                            binder.#mutateState(target, evaluated);
-                        };
-
-                        binder.#addEvent(obj)("click", (e) => applyChange());
+                        mappings.push({ target, expression });
                     });
+
+                    const applyChange = () =>
+                        mappings.forEach(({ target, expression }) => 
+                            binder.#mutateState(target, binder.#evaluate(expression)));
+
+                    binder.#addEvent(obj)("click", (e) => applyChange());
                 });
         };
     })(this);
@@ -1249,52 +1408,55 @@ class JSBinder
     // 
     // <input type="text" data-onchange="name = @value" data-bind="name" />
     // data-onchange="path1 = expression1; path2 = expression2"
-    #onChangeDirective = ((binder) => new class {
+    #onChangeDirective = ((binder) => new class OnChangeDirective {
 
-        #toSafeString = (input) => JSON.stringify(input); //"'" + input.replace(/\'/g, `' + "'" + '`) + "'";
+        static #toSafeString = (input) => JSON.stringify(input); //"'" + input.replace(/\'/g, `' + "'" + '`) + "'";
 
-        #RGX_ONCHANGE_DIRECTIVE = /^([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)\s+=\s+(.+)$/;
-        #RGX_VARIABLE_VALUE = JSBinder.#rgxFormatVariable("value");
+        static #RGX_ONCHANGE_DIRECTIVE = /^([a-zA-Z]{1}[0-9a-zA-Z_]*(?:(?:\[.+\]|\.)(?:[a-zA-Z]{1}[0-9a-zA-Z_]*)?)*)\s+=\s+(.+)$/;
+        static #RGX_VARIABLE_VALUE = JSBinder.#rgxFormatVariable("value");
 
         // Attaches input/change event listeners that mutate state using form values in expressions.
         register = () => {
             binder.#queryDirectives("[data-onchange]")
                 ((obj) => {
+                    const mappings = [];
+
                     JSBinder.#split(JSBinder.#consumeDataset(obj)("onchange")).forEach((mapping) => {
-                        const m = mapping.match(this.#RGX_ONCHANGE_DIRECTIVE);
+                        const m = mapping.match(OnChangeDirective.#RGX_ONCHANGE_DIRECTIVE);
 
                         if (!m)
                             return JSBinder.#error(`Incorrect 'onchange' syntax: ${mapping}`);
 
                         const { 1: target, 2: expression} = m;
-
-                        const applyChange = (value) => {
-                            const evaluated = binder.#evaluate(expression.replace(this.#RGX_VARIABLE_VALUE, value));
-                            binder.#mutateState(target, evaluated);
-                        };
-
-                        switch (JSBinder.#typeOf(obj))
-                        {
-                            case JSBinder.#TYPE.CHECKBOX:
-                                binder.#addEvent(obj)("change", (e) => applyChange(!!obj.checked));
-                                break;
-
-                            case JSBinder.#TYPE.SELECT:
-                                binder.#addEvent(obj)("change", (e) => applyChange(this.#toSafeString(obj.value)));
-                                break;
-
-                            case JSBinder.#TYPE.INPUT:
-                                binder.#addEvent(obj)("input", (e) => applyChange(this.#toSafeString(obj.value)));
-                                break;
-
-                            case JSBinder.#TYPE.TEXTAREA:
-                                binder.#addEvent(obj)("input", (e) => applyChange(this.#toSafeString(obj.value)));
-                                break;
-
-                            default:
-                                return JSBinder.#error(`'onchange' directive is currently only supported for <select> and <input>`);
-                        }
+                        mappings.push({ target, expression });
                     });
+                    
+                    const applyChange = (value) => 
+                        mappings.forEach(({ target, expression }) =>
+                            binder.#mutateState(target, binder.#evaluate(expression.replace(OnChangeDirective.#RGX_VARIABLE_VALUE, value))));
+
+
+                    switch (JSBinder.#typeOf(obj))
+                    {
+                        case JSBinder.#TYPE.CHECKBOX:
+                            binder.#addEvent(obj)("change", (e) => applyChange(!!obj.checked));
+                            break;
+
+                        case JSBinder.#TYPE.SELECT:
+                            binder.#addEvent(obj)("change", (e) => applyChange(OnChangeDirective.#toSafeString(obj.value)));
+                            break;
+
+                        case JSBinder.#TYPE.INPUT:
+                            binder.#addEvent(obj)("input", (e) => applyChange(OnChangeDirective.#toSafeString(obj.value)));
+                            break;
+
+                        case JSBinder.#TYPE.TEXTAREA:
+                            binder.#addEvent(obj)("input", (e) => applyChange(OnChangeDirective.#toSafeString(obj.value)));
+                            break;
+
+                        default:
+                            return JSBinder.#error(`'onchange' directive is currently only supported for <select> and <input>`);
+                    }
                 });
         };
     })(this);
@@ -1317,11 +1479,11 @@ class JSBinder
     // <ul data-render="tree" data-source="treeData"></ul>
     //
     // event: jsbinder-render.
-    #templateDirective = ((binder) => new class {
+    #templateDirective = ((binder) => new class TemplateDirective {
         #templates = {};
         
-        #RGX_TEMPLATE_DIRECTIVE = /^[a-zA-Z]{1}[0-9a-zA-Z_]*$/;
-        #RGX_VARIABLE_DATA = JSBinder.#rgxFormatVariable("data");
+        static #RGX_TEMPLATE_DIRECTIVE = /^[a-zA-Z]{1}[0-9a-zA-Z_]*$/;
+        static #RGX_VARIABLE_DATA = JSBinder.#rgxFormatVariable("data");
 
         // Find all <template data-template='templatekey' /> to be used from elements with data-render='templatekey'.
         register = () => {
@@ -1330,8 +1492,8 @@ class JSBinder
                     const key = JSBinder.#consumeDataset(obj)("template");
                     const html = JSBinder.#cleanHTML(obj.innerHTML);
                     
-                    if (!key.match(this.#RGX_TEMPLATE_DIRECTIVE))
-                        return JSBinder.#error(`'template' parameter 'key' must be a correct variable name`);
+                    if (!key.match(TemplateDirective.#RGX_TEMPLATE_DIRECTIVE))
+                        return JSBinder.#error(`'template' parameter 'key' must match the pattern '${TemplateDirective.#RGX_TEMPLATE_DIRECTIVE}'`);
                     
                     obj.remove();
 
@@ -1358,8 +1520,8 @@ class JSBinder
                     if (!source)
                         return JSBinder.#error(`'render' must have 'source' defined`);
 
-                    obj.innerHTML = template.replace(this.#RGX_VARIABLE_DATA, source);
-                    JSBinder.#dispatchEvent(obj, "render");
+                    obj.innerHTML = template.replace(TemplateDirective.#RGX_VARIABLE_DATA, source);
+                    JSBinder.#dispatchEvent(obj, JSBinder.#EVENT.RENDER);
                     counter++;
                 });
             
@@ -1367,25 +1529,25 @@ class JSBinder
         };
     })(this);
 
-    #stateUpdated = false;
-    #needsRegister = false;
-    #needsRefresh = false;
+    // Queues the callback as a microtask, coalescing requests while it is queued.
+    static #CoalescedTask = class CoalescedTask {
+        #callback = () => {};
+        #queued = false;
+        constructor (callback) { this.#callback = callback; };
+        request = () => { if (!this.#queued) { this.#queued = true; window.queueMicrotask(() => { this.#queued = false; this.#callback(); }); } };
+    };
 
-    #microtaskQueued = false;
+    #stateUpdated = false; 
+    #registerPending = false;
+    #refreshPending = false;
 
-    #queueTasks = () => {
-        if (this.#microtaskQueued) return;
+    #update = new JSBinder.#CoalescedTask(() => {
+        if (this.#abortController.signal.aborted) return;
 
-        this.#microtaskQueued = true;
-
-        window.queueMicrotask(() => {
-            this.#microtaskQueued = false;
-             
-            if (this.#stateUpdated)  { this.#stateUpdated = false; JSBinder.#dispatchEvent(this.#settings.root, "stateupdated", {}); }
-            if (this.#needsRegister) { this.#needsRegister = false; this.#register(); }
-            if (this.#needsRefresh)  { this.#needsRefresh = false; this.#refresh(); }
-        });
-     };
+        if (this.#stateUpdated) { this.#stateUpdated = false; JSBinder.#dispatchEvent(this.#root, JSBinder.#EVENT.STATECHANGED); }
+        if (this.#registerPending) { this.#registerPending = false; this.#register(); }
+        if (this.#refreshPending) { this.#refreshPending = false; this.#refresh(); }
+    });
 
     #register = () => {
         [this.#templateDirective, this.#ifDirective, this.#eachDirective, this.#forDirective, this.#interpolationDirective, this.#bindDirective, this.#attributeDirective, this.#classDirective, this.#styleDirective, this.#onClickDirective, this.#onChangeDirective].forEach(x => x.register());
@@ -1399,11 +1561,9 @@ class JSBinder
         if (count > 0) this.#register();
     };
 
-
-    //ToDo: Add observder to automatically run dispose when root element is removed from dom?
     #dispose = () => {
         this.#abortController.abort();
-        this.#settings.root.removeAttribute("data-jsbinder");
+        this.#root.removeAttribute("data-jsbinder");
         JSBinder.#info("Instance disposed!");
     };
 
@@ -1430,7 +1590,7 @@ class JSBinder
      *     binder.scan(); // Register new bindings in the loaded HTML
      *   });
      */
-    scan = () => { this.#needsRegister = true; this.#queueTasks(); };
+    scan = () => { this.#registerPending = true; this.#update.request(); };
 
     /**
      * Disposes the JSBinder instance, removing all event listeners and cleaning up resources.

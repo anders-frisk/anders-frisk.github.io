@@ -3,51 +3,53 @@
         <title>Recursive Tree Demo</title>
     </head>
     <body>
-        <template data-template="tree">
-        <li data-each="@item in @data" data-key="@item.title">
-            <span>{{@item.title}}</span>
-            <ul data-if="@item.items.length > 0" data-render="tree" data-source="@item.items"></ul>
-        </li>
-        </template>
+        <div id="app">
+            <template data-template="tree">
+                <li data-each="@item in @data" data-key="@item.title">
+                    <span>{{@item.title}}</span>
+                    <ul data-if="@item.items.length > 0" data-render="tree" data-source="@item.items"></ul>
+                </li>
+            </template>
+            
+            <ul data-render="tree" data-source="treeData"></ul>
+            
+            <script src="binder.js"></script>
+            <script>
+                const binder = new JSBinder(document.querySelector("#app"));
+                
+                var treeData = 
+                [
+                    {
+                        title: "Terrestrial planets",
+                        items:
+                        [
+                            { title: "Mercury", items: [] },
+                            { title: "Venus", items: [] },
+                            { title: "Earth", items: [] },
+                            { title: "Mars", items: [] },
+                        ]
+                    },
+                    {
+                        title: "Gas planets",
+                        items:
+                        [
+                            { title: "Jupiter", items: [] },
+                            { title: "Saturn", items: [] },
+                        ]
+                    },
+                    {
+                        title: "Ice planets",
+                        items:
+                        [
+                            { title: "Uranus", items: [] },
+                            { title: "Neptune", items: [] },
+                        ]
+                    },
+                ];
+                binder.setState({ treeData });
 
-        <ul data-render="tree" data-source="treeData"></ul>
-
-        <script src="binder.js"></script>
-        <script>
-            const binder = new JSBinder();
-
-            var treeData = 
-            [
-                {
-                    title: "Terrestrial planets",
-                    items:
-                    [
-                        { title: "Mercury", items: [] },
-                        { title: "Venus", items: [] },
-                        { title: "Earth", items: [] },
-                        { title: "Mars", items: [] },
-                    ]
-                },
-                {
-                    title: "Gas planets",
-                    items:
-                    [
-                        { title: "Jupiter", items: [] },
-                        { title: "Saturn", items: [] },
-                    ]
-                },
-                {
-                    title: "Ice planets",
-                    items:
-                    [
-                        { title: "Uranus", items: [] },
-                        { title: "Neptune", items: [] },
-                    ]
-                },
-            ];
-            binder.setState({ treeData });
-
-            binder.scan();
-        </script>
+                binder.scan();
+            </script>
+        </div>
     </body>
 </html>
